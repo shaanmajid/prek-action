@@ -93,6 +93,23 @@ Running `prek` in a separate step can be useful for example when you need to cus
 | -------------- | ----------------------------------------------------- |
 | `prek-version` | The resolved version of prek that was installed       |
 
+## Versioning
+
+This action follows [semantic versioning](https://semver.org/). You can pin to different levels of specificity:
+
+```yaml
+# Recommended: pin to specific version (immutable)
+- uses: j178/prek-action@v1.1.0
+
+# Pin to major version (receives backwards-compatible updates)
+- uses: j178/prek-action@v1
+
+# Pin to exact commit SHA (most secure)
+- uses: j178/prek-action@564dda4cfa5e96aafdc4a5696c4bf7b46baae5ac
+```
+
+For security-sensitive environments, pinning to a specific version or commit SHA is recommended.
+
 ## Requirements
 
 Your repository must have a `.pre-commit-config.yaml` file configured for use with pre-commit hooks.

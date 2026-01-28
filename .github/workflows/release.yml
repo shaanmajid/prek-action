@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    branches-ignore:
+      - "**"
+    tags:
+      - "v*.*.*"
+
+permissions: {}
+
+jobs:
+  attest:
+    name: Create attestation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: action.yaml
+
+  update-tags:
+    name: Update major/minor tags
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: true
+
+      - name: Update major and minor tags
+        run: |
+          set -ex
+
+          # Extract version components
+          TAG="${GITHUB_REF#refs/tags/}" # v1.2.3
+          MINOR="${TAG%.*}"              # v1.2
+          MAJOR="${MINOR%.*}"            # v1
+
+          if [ "${GITHUB_REF}" = "${TAG}" ]; then
+            echo "This workflow is not triggered by tag push: GITHUB_REF=${GITHUB_REF}"
+            exit 1
+          fi
+
+          MESSAGE="Release ${TAG}"
+
+          # Configure git
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+          # Update major and minor tags
+          git tag -fa "${MAJOR}" -m "${MESSAGE}"
+          git tag -fa "${MINOR}" -m "${MESSAGE}"
+
+          # Push tags
+          git push --force origin "${MINOR}"
+          git push --force origin "${MAJOR}"
