@@ -9,6 +9,7 @@ export function getInputs(): Inputs {
 
   return {
     cache: core.getBooleanInput('cache'),
+    checksum: core.getInput('checksum'),
     extraArgs: legacyExtraArgs || modernExtraArgs,
     installOnly: core.getBooleanInput('install-only'),
     prekVersion: core.getInput('prek-version') || 'latest',

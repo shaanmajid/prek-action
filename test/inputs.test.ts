@@ -84,6 +84,17 @@ describe('getInputs', () => {
     expect(getInputs().cache).toBe(false)
   })
 
+  it('defaults checksum to empty string', async () => {
+    const { getInputs } = await importInputsModule()
+    expect(getInputs().checksum).toBe('')
+  })
+
+  it('passes through a user-provided checksum', async () => {
+    mockContext.inputs.checksum = 'abc123'
+    const { getInputs } = await importInputsModule()
+    expect(getInputs().checksum).toBe('abc123')
+  })
+
   it('enables verbose logs by default and allows opting out', async () => {
     let { getInputs } = await importInputsModule()
     expect(getInputs().showVerboseLogs).toBe(true)

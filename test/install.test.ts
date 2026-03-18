@@ -137,6 +137,44 @@ describe('checksum helpers', () => {
     ).rejects.toThrow(/Checksum mismatch/)
   })
 
+  it('validateDownloadedChecksum uses user-provided checksum over bundled map', async () => {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'prek-action-checksum-'))
+    const archivePath = path.join(rootDir, 'prek.tar.gz')
+    await fs.writeFile(archivePath, 'binary')
+
+    await expect(
+      validateDownloadedChecksum(
+        archivePath,
+        {
+          downloadUrl: 'https://example.invalid/prek.tar.gz',
+          name: 'prek.tar.gz',
+        },
+        testVersion,
+        new Map(),
+        '9a3a45d01531a20e89ac6ae10b0b0beb0492acd7216a368aa062d1a5fecaf9cd',
+      ),
+    ).resolves.toBe('matched')
+  })
+
+  it('validateDownloadedChecksum throws on user-provided checksum mismatch', async () => {
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'prek-action-checksum-'))
+    const archivePath = path.join(rootDir, 'prek.tar.gz')
+    await fs.writeFile(archivePath, 'binary')
+
+    await expect(
+      validateDownloadedChecksum(
+        archivePath,
+        {
+          downloadUrl: 'https://example.invalid/prek.tar.gz',
+          name: 'prek.tar.gz',
+        },
+        testVersion,
+        new Map(),
+        'deadbeef',
+      ),
+    ).rejects.toThrow(/Checksum mismatch/)
+  })
+
   it('hashFile returns the sha256 digest for a file', async () => {
     const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'prek-action-hash-'))
     const archivePath = path.join(rootDir, 'prek.tar.gz')

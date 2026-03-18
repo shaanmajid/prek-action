@@ -9,7 +9,7 @@ import { getAssetForVersion } from './manifest'
 import type { ManifestAsset, ReleaseAsset, Version } from './types'
 
 // Install a specific bare prek version, preferring the GitHub Actions tool cache when available.
-export async function installPrek(version: Version): Promise<string> {
+export async function installPrek(version: Version, userChecksum?: string): Promise<string> {
   const toolArch = getToolCacheArchFor(process.arch)
   const cachedTool = tc.find('prek', version, toolArch)
 
@@ -31,7 +31,7 @@ export async function installPrek(version: Version): Promise<string> {
     const archivePath = await tc.downloadTool(manifestAsset.downloadUrl)
     core.info(`Downloaded archive to ${archivePath}`)
 
-    await verifyDownloadChecksum(archivePath, manifestAsset, version)
+    await verifyDownloadChecksum(archivePath, manifestAsset, version, userChecksum)
 
     const extractedPath = await extractArchive(archivePath, asset)
     core.info(`Extracted ${asset.archiveType} archive to ${extractedPath}`)
@@ -166,8 +166,9 @@ async function verifyDownloadChecksum(
   archivePath: string,
   asset: ManifestAsset,
   version: Version,
+  userChecksum?: string,
 ): Promise<void> {
-  const result = await validateDownloadedChecksum(archivePath, asset, version)
+  const result = await validateDownloadedChecksum(archivePath, asset, version, knownChecksumsByAsset, userChecksum)
   if (result === 'missing') {
     core.warning(
       `Checksum is not known for ${buildChecksumKey(version, asset.name)}; skipping verification for prek ${version}`,
@@ -183,8 +184,9 @@ export async function validateDownloadedChecksum(
   asset: ManifestAsset,
   version: Version,
   checksumMap: ReadonlyMap<string, string> = knownChecksumsByAsset,
+  userChecksum?: string,
 ): Promise<'matched' | 'missing'> {
-  const expectedDigest = checksumMap.get(buildChecksumKey(version, asset.name))
+  const expectedDigest = userChecksum || checksumMap.get(buildChecksumKey(version, asset.name))
   if (!expectedDigest) {
     return 'missing'
   }

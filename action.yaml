@@ -13,6 +13,9 @@ inputs:
     description: Whether to cache the prek environment between workflow runs
     required: false
     default: "true"
+  checksum:
+    description: SHA-256 checksum of the prek archive. Known versions are verified automatically; set this to override or supply a checksum for newer releases.
+    required: false
   install-only:
     description: Only install prek, do not run it
     required: false
