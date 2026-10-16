@@ -2,6 +2,9 @@
 
 Run [prek](https://github.com/j178/prek) in your GitHub Actions workflows.
 
+The `all-files` input described here is a next-major change and requires a release
+containing it. Published action versions retain the previous argument defaults.
+
 ## Usage
 
 ```yaml
@@ -19,7 +22,7 @@ jobs:
 `prek` is always invoked as:
 
 ```text
-prek run --show-diff-on-failure --color=always <extra-args>
+prek run --show-diff-on-failure --color=always [--all-files] <extra-args>
 ```
 
 ## Version Tags
@@ -30,7 +33,8 @@ For v2 and earlier releases, major and minor tags such as `v2` and `v2.0` are mo
 
 | Input | Description | Required | Default |
 | --- | --- | --- | --- |
-| `extra-args` | Additional arguments appended to `prek run --show-diff-on-failure --color=always` | No | `--all-files` |
+| `all-files` | Run against all files; disable when selecting files with `extra-args` | No | `true` |
+| `extra-args` | Additional arguments appended to `prek run --show-diff-on-failure --color=always` | No | `''` |
 | `extra_args` | Deprecated alias for `extra-args` | No | |
 | `prek-version` | Version or semver range to install, for example `0.2.30`, `0.3.x`, `<=1.0.0`, or `latest` | No | `latest` |
 | `install-only` | Install `prek` but skip `prek run` | No | `false` |
@@ -58,13 +62,29 @@ steps:
 
 Pass extra arguments:
 
+`all-files` defaults to `true`, independently of `extra-args`.
+
 ```yaml
-steps:
-  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
-    with:
-      extra-args: '--all-files --directory packages/'
+with:
+  extra-args: '--directory packages/'
 ```
+
+### Next-major migration: file selection
+
+In the next major release, `extra-args` defaults to an empty string and the new
+`all-files` input defaults to `true`. Previously, setting `extra-args` replaced
+the default `--all-files`. Remove existing `--all-files` or `-a` from `extra-args`
+to avoid duplicate flags. Existing workflows using `--files`, `--from`/`--to`,
+or an empty `extra-args` to run only staged files must now set `all-files: false`:
+
+```yaml
+with:
+  all-files: false
+  extra-args: '--files src/main.py'
+```
+
+The action passes extra arguments through to prek without interpreting them.
+The deprecated `extra_args` alias uses the same behavior.
 
 Pin a specific `prek` version:
 

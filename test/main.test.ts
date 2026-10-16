@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mockContext = vi.hoisted(() => ({
   failures: [] as string[],
   inputs: {
-    extraArgs: '--all-files',
+    allFiles: true,
+    cache: true,
+    extraArgs: '',
     installOnly: false,
     prekVersion: 'latest',
     showVerboseLogs: false,
@@ -72,8 +74,9 @@ async function importMainModule() {
 function resetMockContext(): void {
   mockContext.failures = []
   mockContext.inputs = {
+    allFiles: true,
     cache: true,
-    extraArgs: '--all-files',
+    extraArgs: '',
     installOnly: false,
     prekVersion: 'latest',
     showVerboseLogs: false,
@@ -103,6 +106,14 @@ describe('run', () => {
       ['cache-hit', 'true'],
     ])
     expect(mockContext.failures).toEqual([])
+  })
+
+  it('passes explicit file selection through with all-files disabled', async () => {
+    mockContext.inputs.allFiles = false
+    mockContext.inputs.extraArgs = '--files src/main.py'
+    const { run } = await importMainModule()
+    await run()
+    expect(dependencyMocks.runPrek).toHaveBeenCalledWith('/tmp/repo', '--files src/main.py', false)
   })
 
   it('skips cache restore and sets cache-hit=false when cache is disabled', async () => {

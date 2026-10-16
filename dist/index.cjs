@@ -67185,11 +67185,12 @@ function formatError(error2) {
   return error2 instanceof Error ? error2.message : String(error2);
 }
 __name(formatError, "formatError");
-async function runPrek(workingDirectory, extraArgs) {
+async function runPrek(workingDirectory, extraArgs, allFiles) {
   const args = [
     "run",
     "--show-diff-on-failure",
     "--color=always",
+    ...allFiles ? ["--all-files"] : [],
     ...parseArgsStringToArgv(extraArgs)
   ];
   return exec("prek", args, {
@@ -67388,6 +67389,7 @@ function getInputs() {
   const legacyExtraArgs = getInput("extra_args");
   const modernExtraArgs = getInput("extra-args");
   return {
+    allFiles: getBooleanInput("all-files"),
     cache: getBooleanInput("cache"),
     extraArgs: legacyExtraArgs || modernExtraArgs,
     installOnly: getBooleanInput("install-only"),
@@ -69431,7 +69433,7 @@ async function run() {
   }
   let exitCode;
   try {
-    exitCode = await runPrek(inputs.workingDirectory, inputs.extraArgs);
+    exitCode = await runPrek(inputs.workingDirectory, inputs.extraArgs, inputs.allFiles);
   } finally {
     if (inputs.showVerboseLogs) {
       await showVerboseLogs();
