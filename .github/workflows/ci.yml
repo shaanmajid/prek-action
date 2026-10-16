@@ -100,6 +100,31 @@ jobs:
         with:
           prek-version: "0.3.x"
 
+      - name: Read newest stable version from the checked-in manifest
+        id: manifest-version
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const releases = JSON.parse(readFileSync('version-manifest.json', 'utf8'));
+          const release = releases.find(release => !release.prerelease);
+          if (!release) throw new Error('Checked-in manifest has no stable release');
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${release.version}\n`);
+          NODE
+
+      - name: Install newest checked-in version and verify its checksum
+        uses: ./
+        env:
+          # Bypass tools installed by earlier steps so this exercises download verification.
+          RUNNER_TOOL_CACHE: ${{ runner.temp }}/manifest-tool-cache
+        with:
+          prek-version: ${{ steps.manifest-version.outputs.version }}
+          install-only: true
+          cache: false
+
+      - name: Run newest checked-in prek
+        run: prek --version
+
   ecosystem-cpython:
     name: "ecosystem | cpython"
     timeout-minutes: 5

@@ -81,6 +81,11 @@ before writing files if readiness checks fail. Empty or malformed release API
 responses also fail rather than erasing the manifest. Historical checksums are
 retained when GitHub omits their digest.
 
+The OS test matrix installs the newest stable version from the checked-in
+manifest with a fresh tool cache. This checks the proposed release's uploaded
+archive and bundled checksum before the updater PR merges, even while `main`
+still lists the previous release.
+
 Updating these files on `main` advances explicit `latest` and range resolution;
 it does not publish a new action release or refresh checksums bundled in an
 already released action.

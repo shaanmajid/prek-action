@@ -3,10 +3,17 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { knownChecksumsByAsset } from '../src/known-checksums'
+
 vi.mock('node:timers/promises', () => ({ setTimeout: vi.fn(async () => {}) }))
+
 // The updater runs directly on Node 24, including its checked-in TypeScript map.
 // @ts-expect-error The repository's standalone maintenance script is JavaScript.
-import { fetchAllReleases, normalizeDigest, releaseReadinessError, run } from '../scripts/update-known-versions.mjs'
+import {
+  fetchAllReleases,
+  normalizeDigest,
+  releaseReadinessError,
+  run,
+} from '../scripts/update-known-versions.mjs'
 
 const digest = 'a'.repeat(64)
 const names = [
@@ -17,16 +24,17 @@ const names = [
 ]
 function release(version = '0.5.5') {
   return {
-    tag_name: `v${version}`,
-    published_at: '2026-10-01T00:00:00Z',
     assets: names.map(name => ({
-      name, digest: `sha256:${digest}`,
       browser_download_url: `https://github.com/j178/prek/releases/download/v${version}/${name}`,
+      digest: `sha256:${digest}`,
+      name,
     })),
+    published_at: '2026-10-01T00:00:00Z',
+    tag_name: `v${version}`,
   }
 }
 function respond(body: unknown) {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => body }))
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => body, ok: true }))
 }
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -37,14 +45,25 @@ describe('known-version release updater', () => {
   it('preserves the public array schema and excludes drafts and non-installable releases', async () => {
     respond([release('0.5.4'), { ...release(), draft: true }, { ...release(), assets: [] }])
     const result = await fetchAllReleases('')
-    expect(result.releases).toEqual([{
-      assets: names.map(name => ({ name, downloadUrl: `https://github.com/j178/prek/releases/download/v0.5.4/${name}` })),
-      prerelease: false, publishedAt: '2026-10-01T00:00:00Z', version: '0.5.4',
-    }])
+    expect(result.releases).toEqual([
+      {
+        assets: names.map(name => ({
+          downloadUrl: `https://github.com/j178/prek/releases/download/v0.5.4/${name}`,
+          name,
+        })),
+        prerelease: false,
+        publishedAt: '2026-10-01T00:00:00Z',
+        version: '0.5.4',
+      },
+    ])
     expect(result.checksumsByAsset.get(`0.5.4:${names[0]}`)).toBe(digest)
   })
 
-  it.each([{}, [], [{ ...release(), assets: [] }]])('rejects unusable API responses before writing (%j)', async body => {
+  it.each([
+    {},
+    [],
+    [{ ...release(), assets: [] }],
+  ])('rejects unusable API responses before writing (%j)', async body => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'prek-updater-'))
     const manifestPath = path.join(directory, 'version-manifest.json')
     await writeFile(manifestPath, '[]\n')
@@ -72,7 +91,9 @@ describe('known-version release updater', () => {
     await writeFile(manifestPath, '[]\n')
     respond([release()])
     try {
-      const result = expect(run({ directory, expectedTag: 'v0.5.6' })).rejects.toThrow(/not published/)
+      const result = expect(run({ directory, expectedTag: 'v0.5.6' })).rejects.toThrow(
+        /not published/,
+      )
       await result
       expect(await readFile(manifestPath, 'utf8')).toBe('[]\n')
     } finally {
@@ -88,8 +109,24 @@ describe('known-version release updater', () => {
     respond([response])
     try {
       await run({ directory })
-      expect(await readFile(path.join(directory, 'src/known-checksums.ts'), 'utf8'))
-        .toContain(`['${checksumKey}', '${knownChecksumsByAsset.get(checksumKey)}']`)
+      expect(await readFile(path.join(directory, 'src/known-checksums.ts'), 'utf8')).toContain(
+        `[${JSON.stringify(checksumKey)}, ${JSON.stringify(knownChecksumsByAsset.get(checksumKey))}]`,
+      )
+    } finally {
+      await rm(directory, { recursive: true })
+    }
+  })
+
+  it('escapes release asset names in generated TypeScript', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'prek-updater-'))
+    const response = release()
+    response.assets[0].name = 'prek-quoted"target.tar.gz'
+    respond([response])
+    try {
+      await run({ directory })
+      expect(await readFile(path.join(directory, 'src/known-checksums.ts'), 'utf8')).toContain(
+        `[${JSON.stringify(`0.5.5:${response.assets[0].name}`)}, ${JSON.stringify(digest)}]`,
+      )
     } finally {
       await rm(directory, { recursive: true })
     }
@@ -97,7 +134,14 @@ describe('known-version release updater', () => {
 
   it('accepts only full SHA256 digests', () => {
     expect(normalizeDigest(`sha256:${'A'.repeat(64)}`)).toBe(digest)
-    for (const value of [null, '', digest, 'sha256:abc', `sha512:${digest}`, `sha256:${'z'.repeat(64)}`]) {
+    for (const value of [
+      null,
+      '',
+      digest,
+      'sha256:abc',
+      `sha512:${digest}`,
+      `sha256:${'z'.repeat(64)}`,
+    ]) {
       expect(normalizeDigest(value)).toBeNull()
     }
   })
