@@ -85,6 +85,38 @@ describe('known-version release updater', () => {
     expect(releaseReadinessError(result, 'v0.5.5')).toMatch(/missing a SHA256/)
   })
 
+  it.each([
+    undefined,
+    null,
+    '',
+    ' ',
+    123,
+    ['https://example.invalid'],
+  ])('rejects an archive without a string download URL before writing (%j)', async downloadUrl => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'prek-updater-'))
+    const manifestPath = path.join(directory, 'version-manifest.json')
+    await writeFile(manifestPath, '[]\n')
+    const response = release()
+    respond([
+      {
+        ...response,
+        assets: [{ ...response.assets[0], browser_download_url: downloadUrl }],
+      },
+    ])
+    try {
+      await expect(run({ directory, expectedTag: 'v0.5.5' })).rejects.toThrow(/no download URL/)
+      expect(await readFile(manifestPath, 'utf8')).toBe('[]\n')
+    } finally {
+      await rm(directory, { recursive: true })
+    }
+  })
+
+  it('does not coerce non-string archive names into manifest asset names', async () => {
+    const response = release()
+    respond([{ ...response, assets: [{ ...response.assets[0], name: [names[0]] }] }])
+    await expect(fetchAllReleases('')).rejects.toThrow(/no installable/)
+  })
+
   it('does not treat a creation timestamp as publication', async () => {
     respond([{ ...release(), created_at: '2026-10-01T00:00:00Z', published_at: null }])
     const result = await fetchAllReleases('')

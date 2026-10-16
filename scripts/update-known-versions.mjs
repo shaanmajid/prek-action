@@ -102,6 +102,12 @@ export async function fetchAllReleases(token) {
         ? release.assets
             .filter(asset => isInstallableArchive(asset.name))
             .map(asset => {
+              if (
+                typeof asset.browser_download_url !== 'string' ||
+                !asset.browser_download_url.trim()
+              ) {
+                throw new Error(`Release ${version} asset ${asset.name} has no download URL`)
+              }
               const checksum = normalizeDigest(asset.digest)
               if (checksum) {
                 checksumsByAsset.set(buildChecksumKey(version, asset.name), checksum)
@@ -175,7 +181,11 @@ export function releaseReadinessError({ releases, checksumsByAsset }, expectedTa
 }
 
 function isInstallableArchive(name) {
-  return installableArchivePattern.test(name) && !excludedArchiveNames.has(name)
+  return (
+    typeof name === 'string' &&
+    installableArchivePattern.test(name) &&
+    !excludedArchiveNames.has(name)
+  )
 }
 
 function compareReleasesDesc(left, right) {
