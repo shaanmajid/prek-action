@@ -1,19 +1,45 @@
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
+import { pathToFileURL } from 'node:url'
+import { knownChecksumsByAsset } from '../src/known-checksums.ts'
 import semver from 'semver'
 
 const releasesApiUrl = 'https://api.github.com/repos/j178/prek/releases'
-const manifestPath = path.resolve('version-manifest.json')
-const checksumsPath = path.resolve('src/known-checksums.ts')
 const minimumSupportedVersion = '0.0.23'
 const installableArchivePattern = /^prek-(.+)\.(tar\.gz|zip)$/
 const excludedArchiveNames = new Set(['prek-npm-package.tar.gz'])
 
-async function run() {
+export async function run({
+  directory = process.cwd(),
+  expectedTag = process.env.EXPECTED_RELEASE_TAG || '',
+} = {}) {
+  const manifestPath = path.join(directory, 'version-manifest.json')
+  const checksumsPath = path.join(directory, 'src/known-checksums.ts')
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || ''
-  const previousReleases = await readExistingManifest()
+  const previousReleases = await readExistingManifest(manifestPath)
   const previousVersions = new Set(previousReleases.map(release => release.version))
-  const { checksumsByAsset, releases } = await fetchAllReleases(token)
+  let result
+  for (let attempt = 1; ; attempt += 1) {
+    result = await fetchAllReleases(token)
+    if (!expectedTag) break
+    const reason = releaseReadinessError(result, expectedTag)
+    if (!reason) break
+    if (attempt === 10) throw new Error(reason)
+    console.log(`${reason}; retrying in 15 seconds (${attempt}/10)`)
+    await delay(15_000)
+  }
+  const { checksumsByAsset, releases } = result
+  // Historical releases may predate GitHub's digest field. Never erase a known
+  // checksum merely because the API no longer supplies one.
+  for (const release of releases) {
+    for (const asset of release.assets) {
+      const key = buildChecksumKey(release.version, asset.name)
+      if (!checksumsByAsset.has(key) && knownChecksumsByAsset.has(key)) {
+        checksumsByAsset.set(key, knownChecksumsByAsset.get(key))
+      }
+    }
+  }
   const addedVersions = releases
     .map(release => release.version)
     .filter(version => !previousVersions.has(version))
@@ -32,7 +58,7 @@ async function run() {
   await writeOutputs(addedVersions)
 }
 
-async function readExistingManifest() {
+async function readExistingManifest(manifestPath) {
   try {
     return JSON.parse(await readFile(manifestPath, 'utf8'))
   } catch (error) {
@@ -43,7 +69,7 @@ async function readExistingManifest() {
   }
 }
 
-async function fetchAllReleases(token) {
+export async function fetchAllReleases(token) {
   const releases = []
   const checksumsByAsset = new Map()
 
@@ -59,7 +85,10 @@ async function fetchAllReleases(token) {
     }
 
     const pageReleases = await response.json()
-    if (!Array.isArray(pageReleases) || pageReleases.length === 0) {
+    if (!Array.isArray(pageReleases)) {
+      throw new Error(`GitHub API returned a non-array release listing for ${url}`)
+    }
+    if (pageReleases.length === 0) {
       break
     }
 
@@ -85,6 +114,8 @@ async function fetchAllReleases(token) {
             })
         : []
 
+      if (assets.length === 0) continue
+
       releases.push({
         assets,
         prerelease: Boolean(release.prerelease),
@@ -98,6 +129,11 @@ async function fetchAllReleases(token) {
     }
   }
 
+  if (releases.length === 0) {
+    throw new Error(
+      'GitHub API returned no installable prek releases; refusing to overwrite known versions',
+    )
+  }
   return {
     checksumsByAsset,
     releases: releases.sort(compareReleasesDesc),
@@ -115,16 +151,27 @@ function buildHeaders(token) {
   return headers
 }
 
-function normalizeDigest(digest) {
+export function normalizeDigest(digest) {
   if (typeof digest !== 'string' || digest.length === 0) {
     return null
   }
 
-  if (digest.startsWith('sha256:')) {
-    return digest.slice('sha256:'.length)
-  }
+  const match = /^sha256:([a-fA-F0-9]{64})$/.exec(digest)
+  return match ? match[1].toLowerCase() : null
+}
 
-  return digest
+export function releaseReadinessError({ releases, checksumsByAsset }, expectedTag) {
+  const version = semver.valid(expectedTag)
+  if (!version) throw new Error(`Invalid EXPECTED_RELEASE_TAG: ${expectedTag}`)
+  const release = releases.find(candidate => candidate.version === version)
+  if (!release || !release.publishedAt) {
+    return `Expected prek release ${expectedTag} is not published yet`
+  }
+  for (const asset of release.assets) {
+    if (!checksumsByAsset.has(buildChecksumKey(version, asset.name))) {
+      return `Expected release ${expectedTag} is missing a SHA256 digest for ${asset.name}`
+    }
+  }
 }
 
 function isInstallableArchive(name) {
@@ -190,7 +237,9 @@ function formatVersionSummary(addedVersions) {
   return `prek ${addedVersions[0]} and ${addedVersions.length - 1} more`
 }
 
-run().catch(error => {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  run().catch(error => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  })
+}

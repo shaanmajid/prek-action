@@ -64,3 +64,23 @@ git diff --stat
 8. The workflow re-runs validation, creates the GitHub Release with generated notes, and creates the corresponding Git tag from the current `main` commit.
 
 You do not need to create or push the version tag manually; the workflow does that via GitHub when it creates the release.
+
+## Version manifest compatibility
+
+Released actions download `version-manifest.json` from this repository's `main`
+branch for `latest`, version ranges, and release asset URLs. Treat this file as a
+public API for old action versions: keep its top-level array, existing field
+names and types, and descending version order. Additive fields are compatible;
+a breaking schema needs a new filename and a separate migration.
+
+`npm run update-known-versions` refreshes the manifest and bundled checksums.
+The prek release workflow sets `EXPECTED_RELEASE_TAG` to its triggering tag.
+The updater waits up to 135 seconds for that published release, at least one
+installable archive, and SHA256 digests for all its installable archives. It fails
+before writing files if readiness checks fail. Empty or malformed release API
+responses also fail rather than erasing the manifest. Historical checksums are
+retained when GitHub omits their digest.
+
+Updating these files on `main` advances explicit `latest` and range resolution;
+it does not publish a new action release or refresh checksums bundled in an
+already released action.
