@@ -31,6 +31,14 @@ async function resolve(filename: string, content: string): Promise<string> {
   return resolveVersionFile(file)
 }
 
+function lockedEntry(filename: string, version: string, source?: string): string {
+  const registry =
+    filename === 'uv.lock'
+      ? '{ registry = "https://pypi.org/simple" }'
+      : '"registry+https://github.com/rust-lang/crates.io-index"'
+  return `[[package]]\nname = "prek"\nversion = "${version}"\n${source ?? `source = ${registry}`}\n`
+}
+
 describe('version-file', () => {
   it.each([
     'uv.lock',
@@ -39,17 +47,34 @@ describe('version-file', () => {
     expect(
       await resolve(
         filename,
-        '[[package]]\nname = "other"\nversion = "1.0.0"\n[[package]]\nname = "prek"\nversion = "9.0.0"',
+        `[[package]]\nname = "other"\nversion = "1.0.0"\n${lockedEntry(filename, '9.0.0')}`,
       ),
     ).toBe('9.0.0')
   })
 
-  it('deduplicates identical locked versions but rejects ambiguous versions', async () => {
-    const entry = '[[package]]\nname = "prek"\nversion = "0.3.5"\n'
-    expect(await resolve('uv.lock', entry + entry)).toBe('0.3.5')
-    await expect(
-      resolve('uv.lock', `${entry}[[package]]\nname = "prek"\nversion = "0.4.0"`),
-    ).rejects.toThrow('Ambiguous prek versions')
+  it.each(['uv.lock', 'Cargo.lock'])('rejects ambiguous versions in %s', async filename => {
+    const entry = lockedEntry(filename, '0.3.5')
+    expect(await resolve(filename, entry + entry)).toBe('0.3.5')
+    await expect(resolve(filename, entry + lockedEntry(filename, '0.4.0'))).rejects.toThrow(
+      'Ambiguous prek versions',
+    )
+  })
+
+  it.each([
+    ['uv.lock', 'source = { git = "https://example.com/fork.git" }'],
+    ['uv.lock', 'source = { editable = "." }'],
+    ['uv.lock', 'source = { directory = "../prek" }'],
+    ['uv.lock', 'source = { path = "../prek" }'],
+    ['uv.lock', 'source = { url = "https://example.com/prek.whl" }'],
+    ['uv.lock', ''],
+    ['Cargo.lock', 'source = "git+https://example.com/fork.git#abc"'],
+    ['Cargo.lock', ''],
+  ])('rejects non-registry prek sources in %s, including mixed duplicates', async (filename, source) => {
+    const entry = lockedEntry(filename, '0.3.5', source)
+    await expect(resolve(filename, entry)).rejects.toThrow('Unsupported prek source')
+    await expect(resolve(filename, lockedEntry(filename, '0.3.5') + entry)).rejects.toThrow(
+      'Unsupported prek source',
+    )
   })
 
   it.each([
@@ -97,38 +122,42 @@ describe('version-file', () => {
   })
 
   it.each([
-    '[dev-dependencies]\nprek = "0.3.0"',
-    '[workspace.dependencies]\nprek = { version = "0.3.0" }',
-    '[dependencies]\nhooks = { package = "prek", version = "0.3.0" }',
-  ])('uses Cargo caret semantics for bare requirements', async content => {
-    expect(await resolve('Cargo.toml', content)).toBe('0.3.9')
-  })
-
-  it('supports Cargo comma-separated bounds and exact pins', async () => {
-    expect(await resolve('Cargo.toml', '[dependencies]\nprek = ">=0.3.0, <0.3.9"')).toBe('0.3.5')
-    expect(await resolve('Cargo.toml', '[dependencies]\nprek = "=9.0.0"')).toBe('9.0.0')
-  })
-
-  it('never infers prek from the project package version', async () => {
+    '{ git = "https://example.com/fork.git" }',
+    '{ path = "../prek" }',
+    '{ url = "https://example.com/prek.whl" }',
+    '{ workspace = true }',
+    '[{ index = "private", marker = "sys_platform == \'linux\'" }]',
+  ])('rejects unsupported uv source overrides: %s', async source => {
     await expect(
-      resolve('Cargo.toml', '[package]\nname = "my-project"\nversion = "0.3.5"'),
-    ).rejects.toThrow('No prek version')
+      resolve(
+        'pyproject.toml',
+        `[project]\ndependencies = ["prek==0.3.5"]\n[tool.uv.sources]\nprek = ${source}`,
+      ),
+    ).rejects.toThrow('Unsupported prek source')
   })
 
-  it('accepts the actual prek package version and same-file workspace dependencies', async () => {
-    expect(await resolve('Cargo.toml', '[package]\nname = "prek"\nversion = "9.0.0"')).toBe('9.0.0')
+  it('accepts an unconditional uv index override', async () => {
     expect(
       await resolve(
-        'Cargo.toml',
-        '[dev-dependencies]\nprek = { workspace = true }\n[workspace.dependencies]\nprek = "0.3.0"',
+        'pyproject.toml',
+        '[project]\ndependencies = ["prek==0.3.5"]\n[tool.uv.sources]\nprek = { index = "private" }',
       ),
-    ).toBe('0.3.9')
+    ).toBe('0.3.5')
   })
 
-  it('rejects workspace-inherited or path dependencies without explicit versions', async () => {
+  it('rejects direct URL requirements even alongside a supported declaration', async () => {
     await expect(
-      resolve('Cargo.toml', '[dependencies]\nprek = { workspace = true }'),
-    ).rejects.toThrow('has no version')
+      resolve(
+        'pyproject.toml',
+        '[project]\ndependencies = ["prek==0.3.5", "prek @ https://example.com/prek.whl"]',
+      ),
+    ).rejects.toThrow('Unsupported prek source')
+  })
+
+  it('rejects Cargo.toml rather than partially implementing Cargo resolution', async () => {
+    await expect(resolve('Cargo.toml', '[dependencies]\nprek = "0.3.5"')).rejects.toThrow(
+      'Unsupported version-file',
+    )
   })
 
   it('reports missing, malformed, and unsupported files', async () => {
