@@ -62,12 +62,34 @@ jobs:
       - name: Check generated files are committed
         run: git diff --exit-code
 
+  manifest-versions:
+    name: Versions to smoke test
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.versions.outputs.versions }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Fetch pull request base
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --no-tags --depth=1 origin "$BASE_SHA"
+      - name: Select newly added versions
+        id: versions
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/manifest-test-versions.mjs
+
   test:
+    needs: manifest-versions
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        version: ${{ fromJSON(needs.manifest-versions.outputs.versions) }}
     runs-on: ${{ matrix.os }}
-    name: "Test | ${{ matrix.os }}"
+    name: "Test | ${{ matrix.os }} | prek ${{ matrix.version }}"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -100,29 +122,17 @@ jobs:
         with:
           prek-version: "0.3.x"
 
-      - name: Read newest stable version from the checked-in manifest
-        id: manifest-version
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          import { appendFileSync, readFileSync } from 'node:fs';
-          const releases = JSON.parse(readFileSync('version-manifest.json', 'utf8'));
-          const release = releases.find(release => !release.prerelease);
-          if (!release) throw new Error('Checked-in manifest has no stable release');
-          appendFileSync(process.env.GITHUB_OUTPUT, `version=${release.version}\n`);
-          NODE
-
-      - name: Install newest checked-in version and verify its checksum
+      - name: Install proposed version and verify its checksum
         uses: ./
         env:
           # Bypass tools installed by earlier steps so this exercises download verification.
           RUNNER_TOOL_CACHE: ${{ runner.temp }}/manifest-tool-cache
         with:
-          prek-version: ${{ steps.manifest-version.outputs.version }}
+          prek-version: ${{ matrix.version }}
           install-only: true
           cache: false
 
-      - name: Run newest checked-in prek
+      - name: Run proposed prek
         run: prek --version
 
   ecosystem-cpython:

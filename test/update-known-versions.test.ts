@@ -85,6 +85,12 @@ describe('known-version release updater', () => {
     expect(releaseReadinessError(result, 'v0.5.5')).toMatch(/missing a SHA256/)
   })
 
+  it('does not treat a creation timestamp as publication', async () => {
+    respond([{ ...release(), created_at: '2026-10-01T00:00:00Z', published_at: null }])
+    const result = await fetchAllReleases('')
+    expect(releaseReadinessError(result, 'v0.5.5')).toMatch(/not published/)
+  })
+
   it('fails without writing when the triggering release remains unavailable', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'prek-updater-'))
     const manifestPath = path.join(directory, 'version-manifest.json')

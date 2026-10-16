@@ -74,17 +74,9 @@ names and types, and descending version order. Additive fields are compatible;
 a breaking schema needs a new filename and a separate migration.
 
 `npm run update-known-versions` refreshes the manifest and bundled checksums.
-The prek release workflow sets `EXPECTED_RELEASE_TAG` to its triggering tag.
-The updater waits up to 135 seconds for that published release, at least one
-installable archive, and SHA256 digests for all its installable archives. It fails
-before writing files if readiness checks fail. Empty or malformed release API
-responses also fail rather than erasing the manifest. Historical checksums are
-retained when GitHub omits their digest.
-
-The OS test matrix installs the newest stable version from the checked-in
-manifest with a fresh tool cache. This checks the proposed release's uploaded
-archive and bundled checksum before the updater PR merges, even while `main`
-still lists the previous release.
+The prek release workflow sets `EXPECTED_RELEASE_TAG` so the updater waits for
+that published release and its archive digests before writing. CI installs every
+newly added version on Linux, macOS, and Windows, including prereleases and backports.
 
 Updating these files on `main` advances explicit `latest` and range resolution;
 it does not publish a new action release or refresh checksums bundled in an

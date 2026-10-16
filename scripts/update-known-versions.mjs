@@ -119,7 +119,7 @@ export async function fetchAllReleases(token) {
       releases.push({
         assets,
         prerelease: Boolean(release.prerelease),
-        publishedAt: release.published_at || release.created_at || '',
+        publishedAt: release.published_at || '',
         version,
       })
     }
