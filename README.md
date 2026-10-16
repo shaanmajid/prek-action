@@ -74,7 +74,8 @@ steps:
 
 In the next major release, `extra-args` defaults to an empty string and the new
 `all-files` input defaults to `true`. Previously, setting `extra-args` replaced
-the default `--all-files`. Existing workflows using `--files`, `--from`/`--to`,
+the default `--all-files`. Remove any existing `--all-files` or `-a` from
+`extra-args`, because prek rejects duplicate flags. Existing workflows using `--files`, `--from`/`--to`,
 or an empty `extra-args` to run only staged files must now set `all-files: false`:
 
 ```yaml
