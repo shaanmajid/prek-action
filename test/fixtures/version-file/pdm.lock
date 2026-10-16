@@ -1,0 +1,15 @@
+# Representative PDM lockfile entry with static registry artifact URLs.
+[metadata]
+groups = ["default", "dev"]
+strategy = ["inherit_metadata", "static_urls"]
+lock_version = "4.5.0"
+content_hash = "sha256:fixture"
+
+[[package]]
+name = "prek"
+version = "0.2.30"
+requires_python = ">=3.8"
+groups = ["dev"]
+files = [
+    {url = "https://files.pythonhosted.org/prek-0.2.30-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:0123456789abcdef"},
+]

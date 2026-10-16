@@ -33,7 +33,7 @@ For v2 and earlier releases, major and minor tags such as `v2` and `v2.0` are mo
 | `extra-args` | Additional arguments appended to `prek run --show-diff-on-failure --color=always` | No | `--all-files` |
 | `extra_args` | Deprecated alias for `extra-args` | No | |
 | `prek-version` | Version, semver range, `latest`, or `latest-known`; overrides `version-file` | No | `version-file` if supplied, otherwise `latest` |
-| `version-file` | Read prek's version from `uv.lock`, `pyproject.toml`, or `Cargo.lock`, relative to `working-directory` | No | |
+| `version-file` | Read prek's version from `uv.lock`, `poetry.lock`, `pdm.lock`, `pylock.toml` (including `pylock.<name>.toml`), `pyproject.toml`, or `Cargo.lock`, relative to `working-directory` | No | |
 | `install-only` | Install `prek` but skip `prek run` | No | `false` |
 | `working-directory` | Directory where `prek run` is executed | No | `.` |
 | `show-verbose-logs` | Print the `prek` verbose log after `prek run` completes | No | `true` |
@@ -114,7 +114,13 @@ set, the action installs the latest version. Files are read only when explicitly
 selected; relative paths start at `working-directory`.
 
 Lockfiles must contain one unique prek version from a package registry. Git, URL,
-and local sources are unsupported. `pyproject.toml` supports prek in
+and local sources are unsupported. Poetry and PDM index packages are supported,
+including registry mirrors. Pylock files must use format major version 1 and record
+prek's exact version with release wheels or an sdist by HTTP(S) URL. Local artifact paths,
+VCS, directory, and archive sources are unsupported. Artifact URLs and hashes are
+not used: the action downloads the official prek binary for that version.
+
+`pyproject.toml` supports prek in
 `project.dependencies`, `project.optional-dependencies`, and `dependency-groups`,
 using PEP 440 specifiers. Direct URL dependencies and uv source overrides other
 than an unconditional index selection are unsupported.
