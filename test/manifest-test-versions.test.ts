@@ -28,4 +28,12 @@ describe('manifest smoke test versions', () => {
       assertSmokeChecksums([{ assets: [], version: '0.5.5' }], ['0.5.5'], new Map()),
     ).toThrow(/No bundled checksum/)
   })
+
+  it('accepts bundled runner checksums but rejects an unknown additional archive', () => {
+    const release = { assets: [] as Array<{ name: string }>, version: '0.5.5' }
+    expect(() => assertSmokeChecksums([release], ['0.5.5'])).not.toThrow()
+
+    release.assets.push({ name: 'prek-unknown-target.zip' })
+    expect(() => assertSmokeChecksums([release], ['0.5.5'])).toThrow(/prek-unknown-target/)
+  })
 })
