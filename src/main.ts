@@ -12,6 +12,9 @@ export async function run(): Promise<void> {
   const inputs = getInputs()
 
   core.startGroup('Resolving prek version')
+  if (inputs.prekVersion && inputs.versionFile) {
+    core.info('prek-version takes precedence; ignoring version-file')
+  }
   const versionInput =
     inputs.prekVersion ||
     (inputs.versionFile

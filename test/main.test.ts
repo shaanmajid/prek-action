@@ -115,6 +115,9 @@ describe('run', () => {
     await run()
     expect(dependencyMocks.resolveVersionFile).not.toHaveBeenCalled()
     expect(dependencyMocks.resolveVersion).toHaveBeenCalledWith('latest')
+    expect(coreMocks.info).toHaveBeenCalledWith(
+      'prek-version takes precedence; ignoring version-file',
+    )
   })
 
   it('defaults to latest without a version or version-file', async () => {

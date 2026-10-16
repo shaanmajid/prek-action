@@ -31,22 +31,48 @@ async function resolve(filename: string, content: string): Promise<string> {
   return resolveVersionFile(file)
 }
 
-function lockedEntry(filename: string, version: string, source?: string): string {
-  const registry =
-    filename === 'uv.lock'
-      ? '{ registry = "https://pypi.org/simple" }'
-      : '"registry+https://github.com/rust-lang/crates.io-index"'
+function lockedEntry(version: string, source?: string): string {
+  const registry = '{ registry = "https://pypi.org/simple" }'
   return `[[package]]\nname = "prek"\nversion = "${version}"\n${source ?? `source = ${registry}`}\n`
 }
 
 describe('version-file', () => {
   it.each([
+    'uv.lock',
     'poetry.lock',
     'pdm.lock',
     'pylock.toml',
-  ])('reads a realistic %s fixture', async filename => {
+    'pyproject.toml',
+  ])('reads a tool-generated %s fixture', async filename => {
     const fixture = new URL(`./fixtures/version-file/${filename}`, import.meta.url)
-    expect(await resolve(filename, await fs.readFile(fixture, 'utf8'))).toBe('0.2.30')
+    expect(await resolve(filename, await fs.readFile(fixture, 'utf8'))).toBe('0.5.5')
+  })
+
+  it('reads an older uv format revision', async () => {
+    const fixture = new URL('./fixtures/version-file/uv-old.lock', import.meta.url)
+    expect(await resolve('uv.lock', await fs.readFile(fixture, 'utf8'))).toBe('0.5.5')
+  })
+
+  it.each([
+    'uv.lock',
+    'poetry.lock',
+    'pdm.lock',
+  ])('ignores additive metadata in %s', async filename => {
+    const fixture = new URL(`./fixtures/version-file/${filename}`, import.meta.url)
+    expect(
+      await resolve(
+        filename,
+        `${await fs.readFile(fixture, 'utf8')}\n[future-metadata]\nrevision = 999\n`,
+      ),
+    ).toBe('0.5.5')
+  })
+
+  it.each([
+    '__proto__',
+    'constructor',
+    'toString',
+  ])('rejects unsupported filenames inherited by JavaScript objects: %s', async filename => {
+    await expect(resolve(filename, '')).rejects.toThrow('Unsupported version-file')
   })
 
   it.each([
@@ -199,25 +225,24 @@ describe('version-file', () => {
 
   it('reads the lockfile used by the CI install smoke test', async () => {
     const fixture = new URL('./fixtures/version-file/uv.lock', import.meta.url)
-    expect(await resolve('uv.lock', await fs.readFile(fixture, 'utf8'))).toBe('0.2.30')
+    expect(await resolve('uv.lock', await fs.readFile(fixture, 'utf8'))).toBe('0.5.5')
   })
 
   it.each([
     'uv.lock',
-    'Cargo.lock',
   ])('reads exact prek versions from %s without requiring manifest membership', async filename => {
     expect(
       await resolve(
         filename,
-        `[[package]]\nname = "other"\nversion = "1.0.0"\n${lockedEntry(filename, '9.0.0')}`,
+        `[[package]]\nname = "other"\nversion = "1.0.0"\n${lockedEntry('9.0.0')}`,
       ),
     ).toBe('9.0.0')
   })
 
-  it.each(['uv.lock', 'Cargo.lock'])('rejects ambiguous versions in %s', async filename => {
-    const entry = lockedEntry(filename, '0.3.5')
+  it.each(['uv.lock'])('rejects ambiguous versions in %s', async filename => {
+    const entry = lockedEntry('0.3.5')
     expect(await resolve(filename, entry + entry)).toBe('0.3.5')
-    await expect(resolve(filename, entry + lockedEntry(filename, '0.4.0'))).rejects.toThrow(
+    await expect(resolve(filename, entry + lockedEntry('0.4.0'))).rejects.toThrow(
       'Ambiguous prek versions',
     )
   })
@@ -229,12 +254,10 @@ describe('version-file', () => {
     ['uv.lock', 'source = { path = "../prek" }'],
     ['uv.lock', 'source = { url = "https://example.com/prek.whl" }'],
     ['uv.lock', ''],
-    ['Cargo.lock', 'source = "git+https://example.com/fork.git#abc"'],
-    ['Cargo.lock', ''],
   ])('rejects non-registry prek sources in %s, including mixed duplicates', async (filename, source) => {
-    const entry = lockedEntry(filename, '0.3.5', source)
+    const entry = lockedEntry('0.3.5', source)
     await expect(resolve(filename, entry)).rejects.toThrow('Unsupported prek source')
-    await expect(resolve(filename, lockedEntry(filename, '0.3.5') + entry)).rejects.toThrow(
+    await expect(resolve(filename, lockedEntry('0.3.5') + entry)).rejects.toThrow(
       'Unsupported prek source',
     )
   })
@@ -328,10 +351,8 @@ describe('version-file', () => {
     ).rejects.toThrow('dependency overrides')
   })
 
-  it('rejects Cargo.toml rather than partially implementing Cargo resolution', async () => {
-    await expect(resolve('Cargo.toml', '[dependencies]\nprek = "0.3.5"')).rejects.toThrow(
-      'Unsupported version-file',
-    )
+  it.each(['Cargo.lock', 'Cargo.toml'])('rejects unsupported Cargo files: %s', async filename => {
+    await expect(resolve(filename, '')).rejects.toThrow('Unsupported version-file')
   })
 
   it('reports missing, malformed, and unsupported files', async () => {

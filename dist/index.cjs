@@ -20635,11 +20635,11 @@ var require_valid = __commonJS({
   "node_modules/semver/functions/valid.js"(exports2, module2) {
     "use strict";
     var parse5 = require_parse2();
-    var valid5 = /* @__PURE__ */ __name((version3, options) => {
+    var valid6 = /* @__PURE__ */ __name((version3, options) => {
       const v = parse5(version3, options);
       return v ? v.version : null;
     }, "valid");
-    module2.exports = valid5;
+    module2.exports = valid6;
   }
 });
 
@@ -22057,7 +22057,7 @@ var require_semver2 = __commonJS({
     var SemVer = require_semver();
     var identifiers = require_identifiers();
     var parse5 = require_parse2();
-    var valid5 = require_valid();
+    var valid6 = require_valid();
     var clean4 = require_clean();
     var inc2 = require_inc();
     var diff = require_diff();
@@ -22096,7 +22096,7 @@ var require_semver2 = __commonJS({
     var subset = require_subset();
     module2.exports = {
       parse: parse5,
-      valid: valid5,
+      valid: valid6,
       clean: clean4,
       inc: inc2,
       diff,
@@ -67823,9 +67823,9 @@ __name(_completeToolPath, "_completeToolPath");
 function isExplicitVersion(versionSpec) {
   const c = semver3.clean(versionSpec) || "";
   debug(`isExplicit: ${c}`);
-  const valid5 = semver3.valid(c) != null;
-  debug(`explicit? ${valid5}`);
-  return valid5;
+  const valid6 = semver3.valid(c) != null;
+  debug(`explicit? ${valid6}`);
+  return valid6;
 }
 __name(isExplicitVersion, "isExplicitVersion");
 function evaluateVersions(versions, versionSpec) {
@@ -69414,440 +69414,7 @@ __name(hashFile, "hashFile");
 // src/version-file.ts
 var fs14 = __toESM(require("node:fs/promises"), 1);
 var path21 = __toESM(require("node:path"), 1);
-
-// node_modules/@renovatebot/pep440/lib/version.js
-var VERSION_PATTERN = [
-  "v?",
-  "(?:",
-  /* */
-  "(?:(?<epoch>[0-9]+)!)?",
-  // epoch
-  /* */
-  "(?<release>[0-9]+(?:\\.[0-9]+)*)",
-  // release segment
-  /* */
-  "(?<pre>",
-  // pre-release
-  /*    */
-  "[-_\\.]?",
-  /*    */
-  "(?<pre_l>(a|b|c|rc|alpha|beta|pre|preview))",
-  /*    */
-  "[-_\\.]?",
-  /*    */
-  "(?<pre_n>[0-9]+)?",
-  /* */
-  ")?",
-  /* */
-  "(?<post>",
-  // post release
-  /*    */
-  "(?:-(?<post_n1>[0-9]+))",
-  /*    */
-  "|",
-  /*    */
-  "(?:",
-  /*        */
-  "[-_\\.]?",
-  /*        */
-  "(?<post_l>post|rev|r)",
-  /*        */
-  "[-_\\.]?",
-  /*        */
-  "(?<post_n2>[0-9]+)?",
-  /*    */
-  ")",
-  /* */
-  ")?",
-  /* */
-  "(?<dev>",
-  // dev release
-  /*    */
-  "[-_\\.]?",
-  /*    */
-  "(?<dev_l>dev)",
-  /*    */
-  "[-_\\.]?",
-  /*    */
-  "(?<dev_n>[0-9]+)?",
-  /* */
-  ")?",
-  ")",
-  "(?:\\+(?<local>[a-z0-9]+(?:[-_\\.][a-z0-9]+)*))?"
-  // local version
-].join("");
-var validRegex = new RegExp("^" + VERSION_PATTERN + "$", "i");
-var cleanRegex = new RegExp("^\\s*" + VERSION_PATTERN + "\\s*$", "i");
-function parse2(version3, regex) {
-  const { groups } = (regex || validRegex).exec(version3) || {};
-  if (!groups) {
-    return null;
-  }
-  const parsed = {
-    epoch: Number(groups.epoch ? groups.epoch : 0),
-    release: groups.release.split(".").map(Number),
-    pre: normalize_letter_version(groups.pre_l, groups.pre_n),
-    post: normalize_letter_version(
-      groups.post_l,
-      groups.post_n1 || groups.post_n2
-    ),
-    dev: normalize_letter_version(groups.dev_l, groups.dev_n),
-    local: parse_local_version(groups.local)
-  };
-  return parsed;
-}
-__name(parse2, "parse");
-function stringify(parsed) {
-  if (!parsed) {
-    return null;
-  }
-  const { epoch, release, pre, post, dev, local } = parsed;
-  const parts = [];
-  if (epoch !== 0) {
-    parts.push(`${epoch}!`);
-  }
-  parts.push(release.join("."));
-  if (pre) {
-    parts.push(pre.join(""));
-  }
-  if (post) {
-    parts.push("." + post.join(""));
-  }
-  if (dev) {
-    parts.push("." + dev.join(""));
-  }
-  if (local) {
-    parts.push(`+${local}`);
-  }
-  return parts.join("");
-}
-__name(stringify, "stringify");
-function normalize_letter_version(letterIn, numberIn) {
-  let letter = letterIn;
-  let number = numberIn;
-  if (letter) {
-    if (!number) {
-      number = 0;
-    }
-    letter = letter.toLowerCase();
-    if (letter === "alpha") {
-      letter = "a";
-    } else if (letter === "beta") {
-      letter = "b";
-    } else if (["c", "pre", "preview"].includes(letter)) {
-      letter = "rc";
-    } else if (["rev", "r"].includes(letter)) {
-      letter = "post";
-    }
-    return [letter, Number(number)];
-  }
-  if (!letter && number) {
-    letter = "post";
-    return [letter, Number(number)];
-  }
-  return null;
-}
-__name(normalize_letter_version, "normalize_letter_version");
-function parse_local_version(local) {
-  if (local) {
-    return local.split(/[._-]/).map(
-      (part) => Number.isNaN(Number(part)) ? part.toLowerCase() : Number(part)
-    );
-  }
-  return null;
-}
-__name(parse_local_version, "parse_local_version");
-function explain(version3) {
-  const parsed = parse2(version3);
-  if (!parsed) {
-    return parsed;
-  }
-  const { epoch, release, pre, post, dev, local } = parsed;
-  let base_version = "";
-  if (epoch !== 0) {
-    base_version += epoch + "!";
-  }
-  base_version += release.join(".");
-  const is_prerelease = Boolean(dev || pre);
-  const is_devrelease = Boolean(dev);
-  const is_postrelease = Boolean(post);
-  return {
-    epoch,
-    release,
-    pre,
-    post: post ? post[1] : post,
-    dev: dev ? dev[1] : dev,
-    local: local ? local.join(".") : local,
-    public: stringify(parsed).split("+", 1)[0],
-    base_version,
-    is_prerelease,
-    is_devrelease,
-    is_postrelease
-  };
-}
-__name(explain, "explain");
-
-// node_modules/@renovatebot/pep440/lib/operator.js
-var operator_exports = {};
-__export(operator_exports, {
-  "!=": () => ne,
-  "<": () => lt,
-  "<=": () => le,
-  "==": () => eq,
-  "===": () => arbitrary,
-  ">": () => gt2,
-  ">=": () => ge,
-  compare: () => compare,
-  eq: () => eq,
-  ge: () => ge,
-  gt: () => gt2,
-  le: () => le,
-  lt: () => lt,
-  ne: () => ne,
-  rcompare: () => rcompare
-});
-function lt(version3, other) {
-  return compare(version3, other) < 0;
-}
-__name(lt, "lt");
-function le(version3, other) {
-  return compare(version3, other) <= 0;
-}
-__name(le, "le");
-function eq(version3, other) {
-  return compare(version3, other) === 0;
-}
-__name(eq, "eq");
-function ne(version3, other) {
-  return compare(version3, other) !== 0;
-}
-__name(ne, "ne");
-function ge(version3, other) {
-  return compare(version3, other) >= 0;
-}
-__name(ge, "ge");
-function gt2(version3, other) {
-  return compare(version3, other) > 0;
-}
-__name(gt2, "gt");
-function arbitrary(version3, other) {
-  return version3.toLowerCase() === other.toLowerCase();
-}
-__name(arbitrary, "arbitrary");
-function compare(version3, other) {
-  const parsedVersion = parse2(version3);
-  const parsedOther = parse2(other);
-  const keyVersion = calculateKey(parsedVersion);
-  const keyOther = calculateKey(parsedOther);
-  return pyCompare(keyVersion, keyOther);
-}
-__name(compare, "compare");
-function rcompare(version3, other) {
-  return -compare(version3, other);
-}
-__name(rcompare, "rcompare");
-function pyCompare(elemIn, otherIn) {
-  let elem = elemIn;
-  let other = otherIn;
-  if (elem === other) {
-    return 0;
-  }
-  if (Array.isArray(elem) !== Array.isArray(other)) {
-    elem = Array.isArray(elem) ? elem : [elem];
-    other = Array.isArray(other) ? other : [other];
-  }
-  if (Array.isArray(elem)) {
-    const len = Math.min(elem.length, other.length);
-    for (let i = 0; i < len; i += 1) {
-      const res = pyCompare(elem[i], other[i]);
-      if (res !== 0) {
-        return res;
-      }
-    }
-    return elem.length - other.length;
-  }
-  if (elem === -Infinity || other === Infinity) {
-    return -1;
-  }
-  if (elem === Infinity || other === -Infinity) {
-    return 1;
-  }
-  return elem < other ? -1 : 1;
-}
-__name(pyCompare, "pyCompare");
-function calculateKey(input) {
-  const { epoch } = input;
-  let { release, pre, post, local, dev } = input;
-  release = release.concat();
-  release.reverse();
-  while (release.length && release[0] === 0) {
-    release.shift();
-  }
-  release.reverse();
-  if (!pre && !post && dev) pre = -Infinity;
-  else if (!pre) pre = Infinity;
-  if (!post) post = -Infinity;
-  if (!dev) dev = Infinity;
-  if (!local) {
-    local = -Infinity;
-  } else {
-    local = local.map(
-      (i) => Number.isNaN(Number(i)) ? [-Infinity, i] : [Number(i), ""]
-    );
-  }
-  return [epoch, release, pre, post, dev, local];
-}
-__name(calculateKey, "calculateKey");
-
-// node_modules/@renovatebot/pep440/lib/specifier.js
-var RANGE_PATTERN = [
-  "(?<operator>(===|~=|==|!=|<=|>=|<|>))",
-  "\\s*",
-  "(",
-  /*  */
-  "(?<version>(?:" + VERSION_PATTERN.replace(/\?<\w+>/g, "?:") + "))",
-  /*  */
-  "(?<prefix>\\.\\*)?",
-  /*  */
-  "|",
-  /*  */
-  "(?<legacy>[^,;\\s)]+)",
-  ")"
-].join("");
-var isEqualityOperator = /* @__PURE__ */ __name((op) => ["==", "!=", "==="].includes(op), "isEqualityOperator");
-var rangeRegex = new RegExp("^" + RANGE_PATTERN + "$", "i");
-function parse3(ranges) {
-  if (!ranges.trim()) {
-    return [];
-  }
-  const specifiers = ranges.split(",").map((range3) => rangeRegex.exec(range3.trim()) || {}).map(({ groups }) => {
-    if (!groups) {
-      return null;
-    }
-    let { ...spec } = groups;
-    const { operator, version: version3, prefix: prefix2, legacy } = groups;
-    if (version3) {
-      spec = { ...spec, ...explain(version3) };
-      if (operator === "~=") {
-        if (spec.release.length < 2) {
-          return null;
-        }
-      }
-      if (!isEqualityOperator(operator) && spec.local) {
-        return null;
-      }
-      if (prefix2) {
-        if (!isEqualityOperator(operator) || spec.dev || spec.local) {
-          return null;
-        }
-      }
-    }
-    if (legacy && operator !== "===") {
-      return null;
-    }
-    return spec;
-  });
-  if (specifiers.filter(Boolean).length !== specifiers.length) {
-    return null;
-  }
-  return specifiers;
-}
-__name(parse3, "parse");
-function filter2(versions, specifier, options = {}) {
-  const filtered = pick(versions, specifier, options);
-  if (filtered.length === 0 && options.prereleases === void 0) {
-    return pick(versions, specifier, { prereleases: true });
-  }
-  return filtered;
-}
-__name(filter2, "filter");
-function maxSatisfying(versions, range3, options) {
-  const found = filter2(versions, range3, options).sort(compare);
-  return found.length === 0 ? null : found[found.length - 1];
-}
-__name(maxSatisfying, "maxSatisfying");
-function pick(versions, specifier, options) {
-  const parsed = parse3(specifier);
-  if (!parsed) {
-    return [];
-  }
-  return versions.filter((version3) => {
-    const explained = explain(version3);
-    if (!parsed.length) {
-      return explained && !(explained.is_prerelease && !options.prereleases);
-    }
-    return parsed.reduce((pass, spec) => {
-      if (!pass) {
-        return false;
-      }
-      return contains({ ...spec, ...options }, { version: version3, explained });
-    }, true);
-  });
-}
-__name(pick, "pick");
-function satisfies4(version3, specifier, options = {}) {
-  const filtered = pick([version3], specifier, options);
-  return filtered.length === 1;
-}
-__name(satisfies4, "satisfies");
-function arrayStartsWith(array, prefix2) {
-  if (prefix2.length > array.length) {
-    return false;
-  }
-  for (let i = 0; i < prefix2.length; i += 1) {
-    if (prefix2[i] !== array[i]) {
-      return false;
-    }
-  }
-  return true;
-}
-__name(arrayStartsWith, "arrayStartsWith");
-function contains(specifier, input) {
-  const { explained } = input;
-  let { version: version3 } = input;
-  const { ...spec } = specifier;
-  if (spec.prereleases === void 0) {
-    spec.prereleases = spec.is_prerelease;
-  }
-  if (explained && explained.is_prerelease && !spec.prereleases) {
-    return false;
-  }
-  if (spec.operator === "~=") {
-    let compatiblePrefix = spec.release.slice(0, -1).concat("*").join(".");
-    if (spec.epoch) {
-      compatiblePrefix = spec.epoch + "!" + compatiblePrefix;
-    }
-    return satisfies4(version3, `>=${spec.version}, ==${compatiblePrefix}`, {
-      prereleases: spec.prereleases
-    });
-  }
-  if (spec.prefix) {
-    const isMatching = explained.epoch === spec.epoch && arrayStartsWith(explained.release, spec.release);
-    const isEquality = spec.operator !== "!=";
-    return isEquality ? isMatching : !isMatching;
-  }
-  if (explained && explained.local && spec.version) {
-    if (spec.operator !== "===" && !spec.local) {
-      version3 = explained.public;
-      spec.version = explain(spec.version).public;
-    }
-  }
-  if (spec.operator === "<" || spec.operator === ">") {
-    if (eq(spec.release.join("."), explained.release.join("."))) {
-      return false;
-    }
-  }
-  const op = operator_exports[spec.operator];
-  return op(version3, spec.version || spec.legacy);
-}
-__name(contains, "contains");
-function validRange2(specifier) {
-  return Boolean(parse3(specifier));
-}
-__name(validRange2, "validRange");
-
-// src/version-file.ts
-var semver5 = __toESM(require_semver2(), 1);
+var semver6 = __toESM(require_semver2(), 1);
 
 // node_modules/smol-toml/dist/error.js
 function getLineColFromPtr(string, ptr) {
@@ -70553,7 +70120,7 @@ function validateTablePeek(ctx, peek, ptr) {
     TomlError.x(peek === null ? "trying to redefine an already defined table or value" : "document contains an unsafe property", ctx, ptr);
 }
 __name(validateTablePeek, "validateTablePeek");
-function parse4(toml, options = {}) {
+function parse2(toml, options = {}) {
   let ctx = {
     s: toml,
     p: 0,
@@ -70628,12 +70195,446 @@ function parse4(toml, options = {}) {
   }
   return res;
 }
-__name(parse4, "parse");
+__name(parse2, "parse");
 
 // node_modules/smol-toml/dist/stringify.js
 var HAS_WELLFORMED = !!"".isWellFormed;
 
-// src/version-file.ts
+// node_modules/@renovatebot/pep440/lib/version.js
+var VERSION_PATTERN = [
+  "v?",
+  "(?:",
+  /* */
+  "(?:(?<epoch>[0-9]+)!)?",
+  // epoch
+  /* */
+  "(?<release>[0-9]+(?:\\.[0-9]+)*)",
+  // release segment
+  /* */
+  "(?<pre>",
+  // pre-release
+  /*    */
+  "[-_\\.]?",
+  /*    */
+  "(?<pre_l>(a|b|c|rc|alpha|beta|pre|preview))",
+  /*    */
+  "[-_\\.]?",
+  /*    */
+  "(?<pre_n>[0-9]+)?",
+  /* */
+  ")?",
+  /* */
+  "(?<post>",
+  // post release
+  /*    */
+  "(?:-(?<post_n1>[0-9]+))",
+  /*    */
+  "|",
+  /*    */
+  "(?:",
+  /*        */
+  "[-_\\.]?",
+  /*        */
+  "(?<post_l>post|rev|r)",
+  /*        */
+  "[-_\\.]?",
+  /*        */
+  "(?<post_n2>[0-9]+)?",
+  /*    */
+  ")",
+  /* */
+  ")?",
+  /* */
+  "(?<dev>",
+  // dev release
+  /*    */
+  "[-_\\.]?",
+  /*    */
+  "(?<dev_l>dev)",
+  /*    */
+  "[-_\\.]?",
+  /*    */
+  "(?<dev_n>[0-9]+)?",
+  /* */
+  ")?",
+  ")",
+  "(?:\\+(?<local>[a-z0-9]+(?:[-_\\.][a-z0-9]+)*))?"
+  // local version
+].join("");
+var validRegex = new RegExp("^" + VERSION_PATTERN + "$", "i");
+var cleanRegex = new RegExp("^\\s*" + VERSION_PATTERN + "\\s*$", "i");
+function parse3(version3, regex) {
+  const { groups } = (regex || validRegex).exec(version3) || {};
+  if (!groups) {
+    return null;
+  }
+  const parsed = {
+    epoch: Number(groups.epoch ? groups.epoch : 0),
+    release: groups.release.split(".").map(Number),
+    pre: normalize_letter_version(groups.pre_l, groups.pre_n),
+    post: normalize_letter_version(
+      groups.post_l,
+      groups.post_n1 || groups.post_n2
+    ),
+    dev: normalize_letter_version(groups.dev_l, groups.dev_n),
+    local: parse_local_version(groups.local)
+  };
+  return parsed;
+}
+__name(parse3, "parse");
+function stringify2(parsed) {
+  if (!parsed) {
+    return null;
+  }
+  const { epoch, release, pre, post, dev, local } = parsed;
+  const parts = [];
+  if (epoch !== 0) {
+    parts.push(`${epoch}!`);
+  }
+  parts.push(release.join("."));
+  if (pre) {
+    parts.push(pre.join(""));
+  }
+  if (post) {
+    parts.push("." + post.join(""));
+  }
+  if (dev) {
+    parts.push("." + dev.join(""));
+  }
+  if (local) {
+    parts.push(`+${local}`);
+  }
+  return parts.join("");
+}
+__name(stringify2, "stringify");
+function normalize_letter_version(letterIn, numberIn) {
+  let letter = letterIn;
+  let number = numberIn;
+  if (letter) {
+    if (!number) {
+      number = 0;
+    }
+    letter = letter.toLowerCase();
+    if (letter === "alpha") {
+      letter = "a";
+    } else if (letter === "beta") {
+      letter = "b";
+    } else if (["c", "pre", "preview"].includes(letter)) {
+      letter = "rc";
+    } else if (["rev", "r"].includes(letter)) {
+      letter = "post";
+    }
+    return [letter, Number(number)];
+  }
+  if (!letter && number) {
+    letter = "post";
+    return [letter, Number(number)];
+  }
+  return null;
+}
+__name(normalize_letter_version, "normalize_letter_version");
+function parse_local_version(local) {
+  if (local) {
+    return local.split(/[._-]/).map(
+      (part) => Number.isNaN(Number(part)) ? part.toLowerCase() : Number(part)
+    );
+  }
+  return null;
+}
+__name(parse_local_version, "parse_local_version");
+function explain(version3) {
+  const parsed = parse3(version3);
+  if (!parsed) {
+    return parsed;
+  }
+  const { epoch, release, pre, post, dev, local } = parsed;
+  let base_version = "";
+  if (epoch !== 0) {
+    base_version += epoch + "!";
+  }
+  base_version += release.join(".");
+  const is_prerelease = Boolean(dev || pre);
+  const is_devrelease = Boolean(dev);
+  const is_postrelease = Boolean(post);
+  return {
+    epoch,
+    release,
+    pre,
+    post: post ? post[1] : post,
+    dev: dev ? dev[1] : dev,
+    local: local ? local.join(".") : local,
+    public: stringify2(parsed).split("+", 1)[0],
+    base_version,
+    is_prerelease,
+    is_devrelease,
+    is_postrelease
+  };
+}
+__name(explain, "explain");
+
+// node_modules/@renovatebot/pep440/lib/operator.js
+var operator_exports = {};
+__export(operator_exports, {
+  "!=": () => ne,
+  "<": () => lt,
+  "<=": () => le,
+  "==": () => eq,
+  "===": () => arbitrary,
+  ">": () => gt2,
+  ">=": () => ge,
+  compare: () => compare,
+  eq: () => eq,
+  ge: () => ge,
+  gt: () => gt2,
+  le: () => le,
+  lt: () => lt,
+  ne: () => ne,
+  rcompare: () => rcompare
+});
+function lt(version3, other) {
+  return compare(version3, other) < 0;
+}
+__name(lt, "lt");
+function le(version3, other) {
+  return compare(version3, other) <= 0;
+}
+__name(le, "le");
+function eq(version3, other) {
+  return compare(version3, other) === 0;
+}
+__name(eq, "eq");
+function ne(version3, other) {
+  return compare(version3, other) !== 0;
+}
+__name(ne, "ne");
+function ge(version3, other) {
+  return compare(version3, other) >= 0;
+}
+__name(ge, "ge");
+function gt2(version3, other) {
+  return compare(version3, other) > 0;
+}
+__name(gt2, "gt");
+function arbitrary(version3, other) {
+  return version3.toLowerCase() === other.toLowerCase();
+}
+__name(arbitrary, "arbitrary");
+function compare(version3, other) {
+  const parsedVersion = parse3(version3);
+  const parsedOther = parse3(other);
+  const keyVersion = calculateKey(parsedVersion);
+  const keyOther = calculateKey(parsedOther);
+  return pyCompare(keyVersion, keyOther);
+}
+__name(compare, "compare");
+function rcompare(version3, other) {
+  return -compare(version3, other);
+}
+__name(rcompare, "rcompare");
+function pyCompare(elemIn, otherIn) {
+  let elem = elemIn;
+  let other = otherIn;
+  if (elem === other) {
+    return 0;
+  }
+  if (Array.isArray(elem) !== Array.isArray(other)) {
+    elem = Array.isArray(elem) ? elem : [elem];
+    other = Array.isArray(other) ? other : [other];
+  }
+  if (Array.isArray(elem)) {
+    const len = Math.min(elem.length, other.length);
+    for (let i = 0; i < len; i += 1) {
+      const res = pyCompare(elem[i], other[i]);
+      if (res !== 0) {
+        return res;
+      }
+    }
+    return elem.length - other.length;
+  }
+  if (elem === -Infinity || other === Infinity) {
+    return -1;
+  }
+  if (elem === Infinity || other === -Infinity) {
+    return 1;
+  }
+  return elem < other ? -1 : 1;
+}
+__name(pyCompare, "pyCompare");
+function calculateKey(input) {
+  const { epoch } = input;
+  let { release, pre, post, local, dev } = input;
+  release = release.concat();
+  release.reverse();
+  while (release.length && release[0] === 0) {
+    release.shift();
+  }
+  release.reverse();
+  if (!pre && !post && dev) pre = -Infinity;
+  else if (!pre) pre = Infinity;
+  if (!post) post = -Infinity;
+  if (!dev) dev = Infinity;
+  if (!local) {
+    local = -Infinity;
+  } else {
+    local = local.map(
+      (i) => Number.isNaN(Number(i)) ? [-Infinity, i] : [Number(i), ""]
+    );
+  }
+  return [epoch, release, pre, post, dev, local];
+}
+__name(calculateKey, "calculateKey");
+
+// node_modules/@renovatebot/pep440/lib/specifier.js
+var RANGE_PATTERN = [
+  "(?<operator>(===|~=|==|!=|<=|>=|<|>))",
+  "\\s*",
+  "(",
+  /*  */
+  "(?<version>(?:" + VERSION_PATTERN.replace(/\?<\w+>/g, "?:") + "))",
+  /*  */
+  "(?<prefix>\\.\\*)?",
+  /*  */
+  "|",
+  /*  */
+  "(?<legacy>[^,;\\s)]+)",
+  ")"
+].join("");
+var isEqualityOperator = /* @__PURE__ */ __name((op) => ["==", "!=", "==="].includes(op), "isEqualityOperator");
+var rangeRegex = new RegExp("^" + RANGE_PATTERN + "$", "i");
+function parse4(ranges) {
+  if (!ranges.trim()) {
+    return [];
+  }
+  const specifiers = ranges.split(",").map((range3) => rangeRegex.exec(range3.trim()) || {}).map(({ groups }) => {
+    if (!groups) {
+      return null;
+    }
+    let { ...spec } = groups;
+    const { operator, version: version3, prefix: prefix2, legacy } = groups;
+    if (version3) {
+      spec = { ...spec, ...explain(version3) };
+      if (operator === "~=") {
+        if (spec.release.length < 2) {
+          return null;
+        }
+      }
+      if (!isEqualityOperator(operator) && spec.local) {
+        return null;
+      }
+      if (prefix2) {
+        if (!isEqualityOperator(operator) || spec.dev || spec.local) {
+          return null;
+        }
+      }
+    }
+    if (legacy && operator !== "===") {
+      return null;
+    }
+    return spec;
+  });
+  if (specifiers.filter(Boolean).length !== specifiers.length) {
+    return null;
+  }
+  return specifiers;
+}
+__name(parse4, "parse");
+function filter2(versions, specifier, options = {}) {
+  const filtered = pick(versions, specifier, options);
+  if (filtered.length === 0 && options.prereleases === void 0) {
+    return pick(versions, specifier, { prereleases: true });
+  }
+  return filtered;
+}
+__name(filter2, "filter");
+function maxSatisfying(versions, range3, options) {
+  const found = filter2(versions, range3, options).sort(compare);
+  return found.length === 0 ? null : found[found.length - 1];
+}
+__name(maxSatisfying, "maxSatisfying");
+function pick(versions, specifier, options) {
+  const parsed = parse4(specifier);
+  if (!parsed) {
+    return [];
+  }
+  return versions.filter((version3) => {
+    const explained = explain(version3);
+    if (!parsed.length) {
+      return explained && !(explained.is_prerelease && !options.prereleases);
+    }
+    return parsed.reduce((pass, spec) => {
+      if (!pass) {
+        return false;
+      }
+      return contains({ ...spec, ...options }, { version: version3, explained });
+    }, true);
+  });
+}
+__name(pick, "pick");
+function satisfies4(version3, specifier, options = {}) {
+  const filtered = pick([version3], specifier, options);
+  return filtered.length === 1;
+}
+__name(satisfies4, "satisfies");
+function arrayStartsWith(array, prefix2) {
+  if (prefix2.length > array.length) {
+    return false;
+  }
+  for (let i = 0; i < prefix2.length; i += 1) {
+    if (prefix2[i] !== array[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+__name(arrayStartsWith, "arrayStartsWith");
+function contains(specifier, input) {
+  const { explained } = input;
+  let { version: version3 } = input;
+  const { ...spec } = specifier;
+  if (spec.prereleases === void 0) {
+    spec.prereleases = spec.is_prerelease;
+  }
+  if (explained && explained.is_prerelease && !spec.prereleases) {
+    return false;
+  }
+  if (spec.operator === "~=") {
+    let compatiblePrefix = spec.release.slice(0, -1).concat("*").join(".");
+    if (spec.epoch) {
+      compatiblePrefix = spec.epoch + "!" + compatiblePrefix;
+    }
+    return satisfies4(version3, `>=${spec.version}, ==${compatiblePrefix}`, {
+      prereleases: spec.prereleases
+    });
+  }
+  if (spec.prefix) {
+    const isMatching = explained.epoch === spec.epoch && arrayStartsWith(explained.release, spec.release);
+    const isEquality = spec.operator !== "!=";
+    return isEquality ? isMatching : !isMatching;
+  }
+  if (explained && explained.local && spec.version) {
+    if (spec.operator !== "===" && !spec.local) {
+      version3 = explained.public;
+      spec.version = explain(spec.version).public;
+    }
+  }
+  if (spec.operator === "<" || spec.operator === ">") {
+    if (eq(spec.release.join("."), explained.release.join("."))) {
+      return false;
+    }
+  }
+  const op = operator_exports[spec.operator];
+  return op(version3, spec.version || spec.legacy);
+}
+__name(contains, "contains");
+function validRange2(specifier) {
+  return Boolean(parse4(specifier));
+}
+__name(validRange2, "validRange");
+
+// src/python-version.ts
+var semver5 = __toESM(require_semver2(), 1);
+
+// src/version-file-common.ts
 function table(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -70643,7 +70644,7 @@ function unique(values, source) {
   if (versions.length === 0) throw new Error(`No prek version found in ${source}`);
   if (versions.length > 1) {
     throw new Error(
-      `Ambiguous prek versions in ${source}: ${versions.join(", ")}. Set prek-version explicitly.`
+      `Ambiguous prek versions or constraints in ${source}: ${versions.join(", ")}. Set prek-version explicitly.`
     );
   }
   return versions[0];
@@ -70655,51 +70656,8 @@ function unsupportedSource(source) {
   );
 }
 __name(unsupportedSource, "unsupportedSource");
-function releaseArtifact(value) {
-  const artifact = table(value);
-  return !("path" in artifact) && typeof artifact.url === "string" && /^https?:\/\//i.test(artifact.url);
-}
-__name(releaseArtifact, "releaseArtifact");
-function registrySource(pkg, filename) {
-  if (/^pylock(?:\.[^.]+)?\.toml$/.test(filename)) {
-    const wheels = pkg.wheels;
-    return !["vcs", "directory", "archive"].some((key) => key in pkg) && (!("sdist" in pkg) || releaseArtifact(pkg.sdist)) && (!("wheels" in pkg) || Array.isArray(wheels) && wheels.every(releaseArtifact)) && ("sdist" in pkg || Array.isArray(wheels) && wheels.length > 0);
-  }
-  if (filename === "poetry.lock") {
-    const source = table(pkg.source);
-    return !("source" in pkg) || source.type === "legacy" && typeof source.url === "string" && source.url !== "";
-  }
-  if (filename === "pdm.lock") {
-    return !["git", "hg", "svn", "bzr", "path", "url", "subdirectory"].some((key) => key in pkg) && (!("editable" in pkg) || pkg.editable === false);
-  }
-  if (filename === "uv.lock") {
-    return Object.keys(table(pkg.source)).length === 1 && typeof table(pkg.source).registry === "string" && table(pkg.source).registry !== "";
-  }
-  return typeof pkg.source === "string" && pkg.source.startsWith("registry+");
-}
-__name(registrySource, "registrySource");
-function lockedVersion(data, source, filename) {
-  const pylock = /^pylock(?:\.[^.]+)?\.toml$/.test(filename);
-  if (pylock && (typeof data["lock-version"] !== "string" || !/^1\.\d+$/.test(data["lock-version"]))) {
-    throw new Error(`Unsupported pylock lock-version in ${source}. Expected major version 1.`);
-  }
-  const entries = pylock ? data.packages : data.package;
-  const packages = Array.isArray(entries) ? entries : [];
-  const versions = packages.flatMap((entry) => {
-    const pkg = table(entry);
-    if (pkg.name !== "prek") return [];
-    if (!registrySource(pkg, filename)) unsupportedSource(source);
-    if (typeof pkg.version !== "string") {
-      throw new Error(`Missing locked prek version in ${source}`);
-    }
-    return [pkg.version];
-  });
-  const version3 = unique(versions, source);
-  if (!semver5.valid(version3))
-    throw new Error(`Invalid locked prek version in ${source}: ${version3}`);
-  return version3;
-}
-__name(lockedVersion, "lockedVersion");
+
+// src/python-version.ts
 function pythonConstraint(data, source) {
   const uv = table(table(data.tool).uv);
   if (Array.isArray(uv["override-dependencies"]) && uv["override-dependencies"].some(
@@ -70714,8 +70672,9 @@ function pythonConstraint(data, source) {
     if (name.toLowerCase() !== "prek") continue;
     const entries = Array.isArray(value) ? value : [value];
     if (entries.some((entry) => {
-      const keys = Object.keys(table(entry));
-      return keys.length !== 1 || keys[0] !== "index" || typeof table(entry).index !== "string";
+      const selection = table(entry);
+      const keys = Object.keys(selection);
+      return keys.length !== 1 || keys[0] !== "index" || typeof selection.index !== "string";
     })) {
       unsupportedSource(source);
     }
@@ -70747,24 +70706,7 @@ function pythonConstraint(data, source) {
   return unique(constraints, source);
 }
 __name(pythonConstraint, "pythonConstraint");
-async function resolveVersionFile(filePath) {
-  const filename = path21.basename(filePath);
-  const pylock = /^pylock(?:\.[^.]+)?\.toml$/.test(filename);
-  if (!["uv.lock", "poetry.lock", "pdm.lock", "pyproject.toml", "Cargo.lock"].includes(filename) && !pylock) {
-    throw new Error(
-      `Unsupported version-file: ${filename}. Use uv.lock, poetry.lock, pdm.lock, pylock.toml (or pylock.<name>.toml), pyproject.toml, or Cargo.lock.`
-    );
-  }
-  let data;
-  try {
-    data = parse4(await fs14.readFile(filePath, "utf8"));
-  } catch (error2) {
-    throw new Error(
-      `Could not read version-file ${filePath}: ${error2 instanceof Error ? error2.message : String(error2)}`
-    );
-  }
-  info(`Reading prek version from ${filePath}`);
-  if (filename.endsWith(".lock") || pylock) return lockedVersion(data, filePath, filename);
+async function resolvePythonVersion(data, filePath) {
   const constraint = pythonConstraint(data, filePath);
   const exact = constraint.match(/^==\s*([^,\s]+)$/)?.[1];
   if (exact && semver5.valid(exact)) return exact;
@@ -70774,12 +70716,93 @@ async function resolveVersionFile(filePath) {
     throw new Error(`No prek release satisfies ${constraint || "any version"} from ${filePath}`);
   return version3;
 }
+__name(resolvePythonVersion, "resolvePythonVersion");
+
+// src/version-file.ts
+var formats = /* @__PURE__ */ new Map([
+  ["uv.lock", "uv"],
+  ["poetry.lock", "poetry"],
+  ["pdm.lock", "pdm"],
+  ["pyproject.toml", "pyproject"]
+]);
+function fileFormat(filename) {
+  const format = formats.get(filename) ?? (/^pylock(?:\.[^.]+)?\.toml$/.test(filename) ? "pylock" : void 0);
+  if (!format) {
+    throw new Error(
+      `Unsupported version-file: ${filename}. Use uv.lock, poetry.lock, pdm.lock, pylock.toml (or pylock.<name>.toml), or pyproject.toml.`
+    );
+  }
+  return format;
+}
+__name(fileFormat, "fileFormat");
+function releaseArtifact(value) {
+  const artifact = table(value);
+  return !("path" in artifact) && typeof artifact.url === "string" && /^https?:\/\//i.test(artifact.url);
+}
+__name(releaseArtifact, "releaseArtifact");
+function registrySource(pkg, format) {
+  if (format === "pylock") {
+    const wheels = pkg.wheels;
+    return !["vcs", "directory", "archive"].some((key) => key in pkg) && (!("sdist" in pkg) || releaseArtifact(pkg.sdist)) && (!("wheels" in pkg) || Array.isArray(wheels) && wheels.every(releaseArtifact)) && ("sdist" in pkg || Array.isArray(wheels) && wheels.length > 0);
+  }
+  if (format === "poetry") {
+    const source = table(pkg.source);
+    return !("source" in pkg) || source.type === "legacy" && typeof source.url === "string" && source.url !== "";
+  }
+  if (format === "pdm") {
+    return !["git", "hg", "svn", "bzr", "path", "url", "subdirectory"].some((key) => key in pkg) && (!("editable" in pkg) || pkg.editable === false);
+  }
+  if (format === "uv") {
+    const source = table(pkg.source);
+    return Object.keys(source).length === 1 && typeof source.registry === "string" && source.registry !== "";
+  }
+  return false;
+}
+__name(registrySource, "registrySource");
+function lockedVersion(data, source, format) {
+  const pylock = format === "pylock";
+  if (pylock && (typeof data["lock-version"] !== "string" || !/^1\.\d+$/.test(data["lock-version"]))) {
+    throw new Error(`Unsupported pylock lock-version in ${source}. Expected major version 1.`);
+  }
+  const entries = pylock ? data.packages : data.package;
+  const packages = Array.isArray(entries) ? entries : [];
+  const versions = packages.flatMap((entry) => {
+    const pkg = table(entry);
+    if (pkg.name !== "prek") return [];
+    if (!registrySource(pkg, format)) unsupportedSource(source);
+    if (typeof pkg.version !== "string") {
+      throw new Error(`Missing locked prek version in ${source}`);
+    }
+    return [pkg.version];
+  });
+  const version3 = unique(versions, source);
+  if (!semver6.valid(version3))
+    throw new Error(`Invalid locked prek version in ${source}: ${version3}`);
+  return version3;
+}
+__name(lockedVersion, "lockedVersion");
+async function resolveVersionFile(filePath) {
+  const format = fileFormat(path21.basename(filePath));
+  let data;
+  try {
+    data = parse2(await fs14.readFile(filePath, "utf8"));
+  } catch (error2) {
+    throw new Error(
+      `Could not read version-file ${filePath}: ${error2 instanceof Error ? error2.message : String(error2)}`
+    );
+  }
+  info(`Reading prek version from ${filePath}`);
+  return format === "pyproject" ? resolvePythonVersion(data, filePath) : lockedVersion(data, filePath, format);
+}
 __name(resolveVersionFile, "resolveVersionFile");
 
 // src/main.ts
 async function run() {
   const inputs = getInputs();
   startGroup("Resolving prek version");
+  if (inputs.prekVersion && inputs.versionFile) {
+    info("prek-version takes precedence; ignoring version-file");
+  }
   const versionInput = inputs.prekVersion || (inputs.versionFile ? await resolveVersionFile(path22.resolve(inputs.workingDirectory, inputs.versionFile)) : "latest");
   const version3 = await resolveVersion(versionInput);
   info(`Using prek ${version3}`);
