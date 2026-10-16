@@ -22289,7 +22289,7 @@ var require_max_satisfying = __commonJS({
     "use strict";
     var SemVer = require_semver();
     var Range = require_range();
-    var maxSatisfying4 = /* @__PURE__ */ __name((versions, range3, options) => {
+    var maxSatisfying3 = /* @__PURE__ */ __name((versions, range3, options) => {
       let max = null;
       let maxSV = null;
       let rangeObj = null;
@@ -22308,7 +22308,7 @@ var require_max_satisfying = __commonJS({
       });
       return max;
     }, "maxSatisfying");
-    module2.exports = maxSatisfying4;
+    module2.exports = maxSatisfying3;
   }
 });
 
@@ -22405,14 +22405,14 @@ var require_valid2 = __commonJS({
   "node_modules/semver/ranges/valid.js"(exports2, module2) {
     "use strict";
     var Range = require_range();
-    var validRange4 = /* @__PURE__ */ __name((range3, options) => {
+    var validRange3 = /* @__PURE__ */ __name((range3, options) => {
       try {
         return new Range(range3, options).range || "*";
       } catch (er) {
         return null;
       }
     }, "validRange");
-    module2.exports = validRange4;
+    module2.exports = validRange3;
   }
 });
 
@@ -22767,10 +22767,10 @@ var require_semver2 = __commonJS({
     var Range = require_range();
     var satisfies5 = require_satisfies();
     var toComparators = require_to_comparators();
-    var maxSatisfying4 = require_max_satisfying();
+    var maxSatisfying3 = require_max_satisfying();
     var minSatisfying2 = require_min_satisfying();
     var minVersion = require_min_version();
-    var validRange4 = require_valid2();
+    var validRange3 = require_valid2();
     var outside = require_outside();
     var gtr = require_gtr();
     var ltr = require_ltr();
@@ -22806,10 +22806,10 @@ var require_semver2 = __commonJS({
       Range,
       satisfies: satisfies5,
       toComparators,
-      maxSatisfying: maxSatisfying4,
+      maxSatisfying: maxSatisfying3,
       minSatisfying: minSatisfying2,
       minVersion,
-      validRange: validRange4,
+      validRange: validRange3,
       outside,
       gtr,
       ltr,
@@ -69964,11 +69964,12 @@ function formatError(error2) {
   return error2 instanceof Error ? error2.message : String(error2);
 }
 __name(formatError, "formatError");
-async function runPrek(workingDirectory, extraArgs) {
+async function runPrek(workingDirectory, extraArgs, allFiles) {
   const args = [
     "run",
     "--show-diff-on-failure",
     "--color=always",
+    ...allFiles ? ["--all-files"] : [],
     ...parseArgsStringToArgv(extraArgs)
   ];
   return exec("prek", args, {
@@ -70192,6 +70193,7 @@ function getInputs() {
   const legacyExtraArgs = getInput("extra_args");
   const modernExtraArgs = getInput("extra-args");
   return {
+    allFiles: getBooleanInput("all-files"),
     cache: getBooleanInput("cache"),
     extraArgs: legacyExtraArgs || modernExtraArgs,
     installOnly: getBooleanInput("install-only"),
@@ -73464,11 +73466,23 @@ function unique(values, source) {
   return versions[0];
 }
 __name(unique, "unique");
-function lockedVersion(data, source) {
+function unsupportedSource(source) {
+  throw new Error(
+    `Unsupported prek source in ${source}. version-file selects an official prek release; set prek-version explicitly for the release you want.`
+  );
+}
+__name(unsupportedSource, "unsupportedSource");
+function lockedVersion(data, source, filename) {
   const packages = Array.isArray(data.package) ? data.package : [];
   const versions = packages.flatMap((entry) => {
     const pkg = table(entry);
-    return pkg.name === "prek" && typeof pkg.version === "string" ? [pkg.version] : [];
+    if (pkg.name !== "prek") return [];
+    const registry = filename === "uv.lock" ? Object.keys(table(pkg.source)).length === 1 && typeof table(pkg.source).registry === "string" && table(pkg.source).registry !== "" : typeof pkg.source === "string" && pkg.source.startsWith("registry+");
+    if (!registry) unsupportedSource(source);
+    if (typeof pkg.version !== "string") {
+      throw new Error(`Missing locked prek version in ${source}`);
+    }
+    return [pkg.version];
   });
   const version3 = unique(versions, source);
   if (!semver5.valid(version3))
@@ -73477,6 +73491,25 @@ function lockedVersion(data, source) {
 }
 __name(lockedVersion, "lockedVersion");
 function pythonConstraint(data, source) {
+  const uv = table(table(data.tool).uv);
+  if (Array.isArray(uv["override-dependencies"]) && uv["override-dependencies"].some(
+    (dep) => typeof dep === "string" && /^prek(?:\[[^\]]*\])?(?=\s|[<>=!~;(@]|$)/i.test(dep.trim())
+  )) {
+    throw new Error(
+      `prek dependency overrides in ${source} are unsupported. Use uv.lock or set prek-version explicitly.`
+    );
+  }
+  const sources = table(uv.sources);
+  for (const [name, value] of Object.entries(sources)) {
+    if (name.toLowerCase() !== "prek") continue;
+    const entries = Array.isArray(value) ? value : [value];
+    if (entries.some((entry) => {
+      const keys = Object.keys(table(entry));
+      return keys.length !== 1 || keys[0] !== "index" || typeof table(entry).index !== "string";
+    })) {
+      unsupportedSource(source);
+    }
+  }
   const project = table(data.project);
   const lists = [
     project.dependencies,
@@ -73486,8 +73519,9 @@ function pythonConstraint(data, source) {
   const constraints = lists.flatMap(
     (list) => !Array.isArray(list) ? [] : list.flatMap((dep) => {
       if (typeof dep !== "string") return [];
-      const match4 = dep.trim().match(/^prek(?:\[[^\]]*\])?\s*(?=[<>=!~;(]|$)(.*)$/i);
+      const match4 = dep.trim().match(/^prek(?:\[[^\]]*\])?\s*(?=[<>=!~;(@]|$)(.*)$/i);
       if (!match4) return [];
+      if (match4[1].trim().startsWith("@")) unsupportedSource(source);
       const constraint = match4[1].trim().replace(/^\((.*)\)$/, "$1").trim();
       if (constraint.includes(";")) {
         throw new Error(
@@ -73503,46 +73537,11 @@ function pythonConstraint(data, source) {
   return unique(constraints, source);
 }
 __name(pythonConstraint, "pythonConstraint");
-function cargoConstraint(data, source) {
-  const pkg = table(data.package);
-  if (pkg.name === "prek" && typeof pkg.version === "string") return `=${pkg.version}`;
-  const workspaceDependencies = table(table(data.workspace).dependencies);
-  const tables = [
-    data.dependencies,
-    data["dev-dependencies"],
-    data["build-dependencies"],
-    workspaceDependencies
-  ];
-  const constraints = [];
-  for (const dependencies of tables) {
-    for (const [name, value] of Object.entries(table(dependencies))) {
-      const dependency = table(value);
-      if ((dependency.package ?? name) !== "prek") continue;
-      const inherited = workspaceDependencies[name];
-      const version3 = typeof value === "string" ? value : dependency.version ?? (dependency.workspace === true ? typeof inherited === "string" ? inherited : table(inherited).version : void 0);
-      if (typeof version3 !== "string") {
-        throw new Error(
-          `prek dependency in ${source} has no version. Use Cargo.lock or set prek-version explicitly.`
-        );
-      }
-      constraints.push(version3);
-    }
-  }
-  return unique(constraints, source);
-}
-__name(cargoConstraint, "cargoConstraint");
-function cargoRange(constraint) {
-  return constraint.split(",").map((part) => {
-    const value = part.trim();
-    return /^\d/.test(value) && !/[xX*]/.test(value) ? `^${value}` : value;
-  }).join(" ");
-}
-__name(cargoRange, "cargoRange");
 async function resolveVersionFile(filePath) {
   const filename = path21.basename(filePath);
-  if (!["uv.lock", "pyproject.toml", "Cargo.lock", "Cargo.toml"].includes(filename)) {
+  if (!["uv.lock", "pyproject.toml", "Cargo.lock"].includes(filename)) {
     throw new Error(
-      `Unsupported version-file: ${filename}. Use uv.lock, pyproject.toml, Cargo.lock, or Cargo.toml.`
+      `Unsupported version-file: ${filename}. Use uv.lock, pyproject.toml, or Cargo.lock.`
     );
   }
   let data;
@@ -73554,17 +73553,12 @@ async function resolveVersionFile(filePath) {
     );
   }
   info(`Reading prek version from ${filePath}`);
-  if (filename.endsWith(".lock")) return lockedVersion(data, filePath);
-  const python = filename === "pyproject.toml";
-  const constraint = python ? pythonConstraint(data, filePath) : cargoConstraint(data, filePath);
-  const exact = constraint.match(python ? /^==\s*([^,\s]+)$/ : /^=\s*([^,\s]+)$/)?.[1];
+  if (filename.endsWith(".lock")) return lockedVersion(data, filePath, filename);
+  const constraint = pythonConstraint(data, filePath);
+  const exact = constraint.match(/^==\s*([^,\s]+)$/)?.[1];
   if (exact && semver5.valid(exact)) return exact;
-  const range3 = python ? constraint : cargoRange(constraint);
-  if (!python && !semver5.validRange(range3)) {
-    throw new Error(`Invalid prek Cargo version requirement in ${filePath}: ${constraint}`);
-  }
   const versions = (await getVersionManifest()).filter((release) => !release.prerelease).map((release) => release.version);
-  const version3 = python ? maxSatisfying2(versions, range3) : semver5.maxSatisfying(versions, range3);
+  const version3 = maxSatisfying2(versions, constraint);
   if (!version3)
     throw new Error(`No prek release satisfies ${constraint || "any version"} from ${filePath}`);
   return version3;
@@ -73594,7 +73588,7 @@ async function run() {
   }
   let exitCode;
   try {
-    exitCode = await runPrek(inputs.workingDirectory, inputs.extraArgs);
+    exitCode = await runPrek(inputs.workingDirectory, inputs.extraArgs, inputs.allFiles);
   } finally {
     if (inputs.showVerboseLogs) {
       await showVerboseLogs(inputs.workingDirectory);
