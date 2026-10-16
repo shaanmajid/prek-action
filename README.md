@@ -33,7 +33,7 @@ For v2 and earlier releases, major and minor tags such as `v2` and `v2.0` are mo
 | `extra-args` | Additional arguments appended to `prek run --show-diff-on-failure --color=always` | No | `--all-files` |
 | `extra_args` | Deprecated alias for `extra-args` | No | |
 | `prek-version` | Version, semver range, `latest`, or `latest-known`; overrides `version-file` | No | `version-file` if supplied, otherwise `latest` |
-| `version-file` | Read prek's version from `uv.lock`, `pyproject.toml`, `Cargo.lock`, or `Cargo.toml`, relative to `working-directory` | No | |
+| `version-file` | Read prek's version from `uv.lock`, `pyproject.toml`, or `Cargo.lock`, relative to `working-directory` | No | |
 | `install-only` | Install `prek` but skip `prek run` | No | `false` |
 | `working-directory` | Directory where `prek run` is executed | No | `.` |
 | `show-verbose-logs` | Print the `prek` verbose log after `prek run` completes | No | `true` |
@@ -113,16 +113,19 @@ with:
 set, the action installs the latest version. Files are read only when explicitly
 selected; relative paths start at `working-directory`.
 
-Lockfiles must contain one unique prek version. `pyproject.toml` supports prek in
+Lockfiles must contain one unique prek version from a package registry. Git, URL,
+and local sources are unsupported. `pyproject.toml` supports prek in
 `project.dependencies`, `project.optional-dependencies`, and `dependency-groups`,
-using PEP 440 specifiers. `Cargo.toml` supports prek dependency version requirements
-(including renamed dependencies and workspace declarations in the same file), or
-the package version when the package itself is named `prek`.
+using PEP 440 specifiers. Direct URL dependencies and uv source overrides other
+than an unconditional index selection are unsupported.
+
+Inference selects an official prek release version; it does not install the
+project's Python or Rust dependencies, or reproduce packages from other sources.
 
 Manifest requirements select the highest matching stable release. Distinct
 constraints across dependency groups and conditional Python dependencies require
 an explicit `prek-version` or an unambiguous lockfile. The action does not resolve
-Python environment markers or search parent Cargo workspaces.
+Python environment markers or search other files.
 Missing or malformed files, missing prek entries, and unsupported or ambiguous
 requirements fail with an error; they never fall back to installing latest.
 

@@ -25,11 +25,28 @@ function unique(values: string[], source: string): string {
   return versions[0]
 }
 
-function lockedVersion(data: Table, source: string): string {
+function unsupportedSource(source: string): never {
+  throw new Error(
+    `Unsupported prek source in ${source}. version-file selects an official prek release; set prek-version explicitly for the release you want.`,
+  )
+}
+
+function lockedVersion(data: Table, source: string, filename: string): string {
   const packages = Array.isArray(data.package) ? data.package : []
   const versions = packages.flatMap(entry => {
     const pkg = table(entry)
-    return pkg.name === 'prek' && typeof pkg.version === 'string' ? [pkg.version] : []
+    if (pkg.name !== 'prek') return []
+    const registry =
+      filename === 'uv.lock'
+        ? Object.keys(table(pkg.source)).length === 1 &&
+          typeof table(pkg.source).registry === 'string' &&
+          table(pkg.source).registry !== ''
+        : typeof pkg.source === 'string' && pkg.source.startsWith('registry+')
+    if (!registry) unsupportedSource(source)
+    if (typeof pkg.version !== 'string') {
+      throw new Error(`Missing locked prek version in ${source}`)
+    }
+    return [pkg.version]
   })
   const version = unique(versions, source)
   if (!semver.valid(version))
@@ -38,6 +55,19 @@ function lockedVersion(data: Table, source: string): string {
 }
 
 function pythonConstraint(data: Table, source: string): string {
+  const sources = table(table(table(data.tool).uv).sources)
+  for (const [name, value] of Object.entries(sources)) {
+    if (name.toLowerCase() !== 'prek') continue
+    const entries = Array.isArray(value) ? value : [value]
+    if (
+      entries.some(entry => {
+        const keys = Object.keys(table(entry))
+        return keys.length !== 1 || keys[0] !== 'index' || typeof table(entry).index !== 'string'
+      })
+    ) {
+      unsupportedSource(source)
+    }
+  }
   const project = table(data.project)
   const lists = [
     project.dependencies,
@@ -49,8 +79,9 @@ function pythonConstraint(data: Table, source: string): string {
       ? []
       : list.flatMap(dep => {
           if (typeof dep !== 'string') return []
-          const match = dep.trim().match(/^prek(?:\[[^\]]*\])?\s*(?=[<>=!~;(]|$)(.*)$/i)
+          const match = dep.trim().match(/^prek(?:\[[^\]]*\])?\s*(?=[<>=!~;(@]|$)(.*)$/i)
           if (!match) return []
+          if (match[1].trim().startsWith('@')) unsupportedSource(source)
           const constraint = match[1]
             .trim()
             .replace(/^\((.*)\)$/, '$1')
@@ -69,58 +100,11 @@ function pythonConstraint(data: Table, source: string): string {
   return unique(constraints, source)
 }
 
-function cargoConstraint(data: Table, source: string): string {
-  const pkg = table(data.package)
-  if (pkg.name === 'prek' && typeof pkg.version === 'string') return `=${pkg.version}`
-  const workspaceDependencies = table(table(data.workspace).dependencies)
-  const tables = [
-    data.dependencies,
-    data['dev-dependencies'],
-    data['build-dependencies'],
-    workspaceDependencies,
-  ]
-  const constraints: string[] = []
-  for (const dependencies of tables) {
-    for (const [name, value] of Object.entries(table(dependencies))) {
-      const dependency = table(value)
-      if ((dependency.package ?? name) !== 'prek') continue
-      const inherited = workspaceDependencies[name]
-      const version =
-        typeof value === 'string'
-          ? value
-          : (dependency.version ??
-            (dependency.workspace === true
-              ? typeof inherited === 'string'
-                ? inherited
-                : table(inherited).version
-              : undefined))
-      if (typeof version !== 'string') {
-        throw new Error(
-          `prek dependency in ${source} has no version. Use Cargo.lock or set prek-version explicitly.`,
-        )
-      }
-      constraints.push(version)
-    }
-  }
-  return unique(constraints, source)
-}
-
-// Cargo treats bare versions as caret requirements; npm's semver treats them as exact versions.
-function cargoRange(constraint: string): string {
-  return constraint
-    .split(',')
-    .map(part => {
-      const value = part.trim()
-      return /^\d/.test(value) && !/[xX*]/.test(value) ? `^${value}` : value
-    })
-    .join(' ')
-}
-
 export async function resolveVersionFile(filePath: string): Promise<string> {
   const filename = path.basename(filePath)
-  if (!['uv.lock', 'pyproject.toml', 'Cargo.lock', 'Cargo.toml'].includes(filename)) {
+  if (!['uv.lock', 'pyproject.toml', 'Cargo.lock'].includes(filename)) {
     throw new Error(
-      `Unsupported version-file: ${filename}. Use uv.lock, pyproject.toml, Cargo.lock, or Cargo.toml.`,
+      `Unsupported version-file: ${filename}. Use uv.lock, pyproject.toml, or Cargo.lock.`,
     )
   }
   let data: Table
@@ -132,20 +116,15 @@ export async function resolveVersionFile(filePath: string): Promise<string> {
     )
   }
   core.info(`Reading prek version from ${filePath}`)
-  if (filename.endsWith('.lock')) return lockedVersion(data, filePath)
+  if (filename.endsWith('.lock')) return lockedVersion(data, filePath, filename)
 
-  const python = filename === 'pyproject.toml'
-  const constraint = python ? pythonConstraint(data, filePath) : cargoConstraint(data, filePath)
-  const exact = constraint.match(python ? /^==\s*([^,\s]+)$/ : /^=\s*([^,\s]+)$/)?.[1]
+  const constraint = pythonConstraint(data, filePath)
+  const exact = constraint.match(/^==\s*([^,\s]+)$/)?.[1]
   if (exact && semver.valid(exact)) return exact
-  const range = python ? constraint : cargoRange(constraint)
-  if (!python && !semver.validRange(range)) {
-    throw new Error(`Invalid prek Cargo version requirement in ${filePath}: ${constraint}`)
-  }
   const versions = (await getVersionManifest())
     .filter(release => !release.prerelease)
     .map(release => release.version)
-  const version = python ? maxSatisfying(versions, range) : semver.maxSatisfying(versions, range)
+  const version = maxSatisfying(versions, constraint)
   if (!version)
     throw new Error(`No prek release satisfies ${constraint || 'any version'} from ${filePath}`)
   return version
