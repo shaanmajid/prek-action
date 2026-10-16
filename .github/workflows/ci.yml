@@ -102,6 +102,27 @@ jobs:
         with:
           prek-version: "0.3.x"
 
+      - name: Test | ${{ matrix.os }} | latest-known install
+        uses: ./
+        with:
+          prek-version: latest-known
+          install-only: true
+          cache: false
+
+      - name: Test | ${{ matrix.os }} | locked project version
+        uses: ./
+        with:
+          version-file: test/fixtures/version-file/uv.lock
+          install-only: true
+          cache: false
+
+      - name: Test | ${{ matrix.os }} | Python version requirement
+        uses: ./
+        with:
+          version-file: test/fixtures/version-file/pyproject.toml
+          install-only: true
+          cache: false
+
   ecosystem-cpython:
     name: "ecosystem | cpython"
     timeout-minutes: 5

@@ -32,7 +32,7 @@ For v2 and earlier releases, major and minor tags such as `v2` and `v2.0` are mo
 | --- | --- | --- | --- |
 | `extra-args` | Additional arguments appended to `prek run --show-diff-on-failure --color=always` | No | `--all-files` |
 | `extra_args` | Deprecated alias for `extra-args` | No | |
-| `prek-version` | Version or semver range to install, for example `0.2.30`, `0.3.x`, `<=1.0.0`, or `latest` | No | `latest` |
+| `prek-version` | Version, semver range, `latest`, or `latest-known`; overrides `version-file` | No | `version-file` if supplied, otherwise `latest` |
 | `version-file` | Read prek's version from `uv.lock`, `pyproject.toml`, `Cargo.lock`, or `Cargo.toml`, relative to `working-directory` | No | |
 | `install-only` | Install `prek` but skip `prek run` | No | `false` |
 | `working-directory` | Directory where `prek run` is executed | No | `.` |
@@ -58,6 +58,8 @@ steps:
 ```
 
 Pass extra arguments:
+
+Setting `extra-args` replaces the default `--all-files`; include it to keep checking all files.
 
 ```yaml
 steps:
@@ -87,12 +89,24 @@ steps:
       prek-version: '0.3.x'
 ```
 
-Reuse a project version:
+Select the newest stable version included in the action's bundled checksums:
 
 ```yaml
-- uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
-  with:
-    version-file: uv.lock
+with:
+  prek-version: latest-known
+```
+
+`latest-known` resolves without downloading the version manifest. Updating the action
+pin advances this version when the newer action includes newer checksums. `latest`
+instead follows the version manifest on this repository's `main` branch. Downloads
+with a bundled checksum are verified before extraction; downloads without one emit
+a warning. Existing runner tool-cache entries are reused without re-verification.
+
+Reuse a project version by configuring the action step:
+
+```yaml
+with:
+  version-file: uv.lock
 ```
 
 `prek-version` takes precedence, including an explicit `latest`. If neither input is
@@ -132,6 +146,21 @@ steps:
     with:
       show-verbose-logs: false
 ```
+## Caching
+
+The action caches prek's hook environments, using the cache directory reported by
+prek (including `PREK_HOME`). The key includes the runner OS, architecture, Python
+location when set by `setup-python`, and the paths and contents of `prek.toml`,
+`.pre-commit-config.yaml`, and `.pre-commit-config.yml` files under `working-directory`.
+Directory symlinks and files resolving outside that directory are not hashed.
+
+Caching uses exact matches. Changing a hook configuration creates a new cache;
+there is no broad fallback to older caches. Cache service failures produce warnings
+and allow the checks to continue. Set `cache: false` to disable restore and save.
+
+The downloaded prek executable uses the runner's separate tool cache. `install-only`
+still restores and saves hook environments, so later workflow steps can use them.
+
 ## Requirements
 
 The target repository needs a `prek` or pre-commit configuration file:
