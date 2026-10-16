@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error The CI selector is a standalone JavaScript script.
-import { selectTestVersions } from '../scripts/manifest-test-versions.mjs'
+import { assertSmokeChecksums, selectTestVersions } from '../scripts/manifest-test-versions.mjs'
 
 const releases = (versions: string[]) => versions.map(version => ({ version }))
 
@@ -21,5 +21,11 @@ describe('manifest smoke test versions', () => {
 
   it('rejects an empty manifest', () => {
     expect(() => selectTestVersions([])).toThrow(/no releases/)
+  })
+
+  it('requires runner checksums even if the manifest omits their archives', () => {
+    expect(() =>
+      assertSmokeChecksums([{ assets: [], version: '0.5.5' }], ['0.5.5'], new Map()),
+    ).toThrow(/No bundled checksum/)
   })
 })
