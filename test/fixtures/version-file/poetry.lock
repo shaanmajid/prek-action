@@ -1,0 +1,16 @@
+# Representative Poetry lockfile entry; only the version is used by the action.
+[[package]]
+name = "prek"
+version = "0.2.30"
+description = "A better pre-commit, re-engineered in Rust"
+optional = false
+python-versions = ">=3.8"
+groups = ["dev"]
+files = [
+    {file = "prek-0.2.30-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:0123456789abcdef"},
+]
+
+[metadata]
+lock-version = "2.1"
+python-versions = ">=3.11"
+content-hash = "fixture"

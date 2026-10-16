@@ -40,6 +40,163 @@ function lockedEntry(filename: string, version: string, source?: string): string
 }
 
 describe('version-file', () => {
+  it.each([
+    'poetry.lock',
+    'pdm.lock',
+    'pylock.toml',
+  ])('reads a realistic %s fixture', async filename => {
+    const fixture = new URL(`./fixtures/version-file/${filename}`, import.meta.url)
+    expect(await resolve(filename, await fs.readFile(fixture, 'utf8'))).toBe('0.2.30')
+  })
+
+  it.each([
+    'pylock.toml',
+    'pylock.ci.toml',
+  ])('reads exact release versions from %s', async filename => {
+    expect(
+      await resolve(
+        filename,
+        'lock-version = "1.1"\n[[packages]]\nname = "prek"\nversion = "9.0.0"\nsdist = { url = "https://mirror.example/prek.tar.gz" }',
+      ),
+    ).toBe('9.0.0')
+  })
+
+  it.each([
+    'poetry.lock',
+    'pdm.lock',
+    'pylock.toml',
+  ])('checks all prek entries in %s', async filename => {
+    const header = filename === 'pylock.toml' ? 'lock-version = "1.0"\n' : ''
+    const section = filename === 'pylock.toml' ? 'packages' : 'package'
+    const source =
+      filename === 'pylock.toml' ? 'wheels = [{ url = "https://example.com/prek.whl" }]\n' : ''
+    const entry = (version: string) =>
+      `[[${section}]]\nname = "prek"\nversion = "${version}"\n${source}`
+    expect(await resolve(filename, header + entry('0.3.5') + entry('0.3.5'))).toBe('0.3.5')
+    await expect(resolve(filename, header + entry('0.3.5') + entry('0.4.0'))).rejects.toThrow(
+      'Ambiguous prek versions',
+    )
+    await expect(
+      resolve(filename, header + `[[${section}]]\nname = "prek"\n${source}`),
+    ).rejects.toThrow('Missing locked prek version')
+    await expect(resolve(filename, header + entry('invalid'))).rejects.toThrow(
+      'Invalid locked prek version',
+    )
+    await expect(
+      resolve(filename, header + `[[${section}]]\nname = "other"\nversion = "0.3.5"`),
+    ).rejects.toThrow('No prek version')
+  })
+
+  it('accepts Poetry registry mirrors', async () => {
+    expect(
+      await resolve(
+        'poetry.lock',
+        '[[package]]\nname = "prek"\nversion = "0.3.5"\nsource = { type = "legacy", url = "https://mirror.example/simple", reference = "private" }',
+      ),
+    ).toBe('0.3.5')
+  })
+
+  it.each([
+    '{ type = "git", url = "https://example.com/fork.git" }',
+    '{ type = "file", url = "../prek.whl" }',
+    '{ type = "directory", url = "../prek" }',
+    '{ type = "url", url = "https://example.com/prek.whl" }',
+    '{ type = "legacy" }',
+    '{}',
+    '"https://example.com/simple"',
+  ])('rejects unsupported Poetry sources including mixed duplicates: %s', async source => {
+    const supported = '[[package]]\nname = "prek"\nversion = "0.3.5"\n'
+    const unsupported = `${supported}source = ${source}\n`
+    await expect(resolve('poetry.lock', unsupported)).rejects.toThrow('Unsupported prek source')
+    await expect(resolve('poetry.lock', supported + unsupported)).rejects.toThrow(
+      'Unsupported prek source',
+    )
+  })
+
+  it.each([
+    'sdist = { path = "../prek.tar.gz" }',
+    'sdist = { url = "file:///tmp/prek.tar.gz" }',
+    'wheels = [{ url = "file:///tmp/prek.whl" }]',
+    'sdist = { path = "../prek.tar.gz", url = "https://example.com/prek.tar.gz" }',
+    'wheels = [{ path = "../prek.whl" }]',
+    'wheels = [{ path = "../prek.whl", url = "https://example.com/prek.whl" }]',
+    'vcs = { type = "git", url = "https://example.com/fork.git" }',
+    'directory = { path = "../prek" }',
+    'archive = { url = "https://example.com/prek.whl" }',
+    '',
+    'wheels = []',
+    'wheels = ["invalid"]',
+    'sdist = "invalid"',
+  ])('rejects unsupported pylock sources including mixed duplicates: %s', async source => {
+    const entry = '[[packages]]\nname = "prek"\nversion = "0.3.5"\n'
+    const supported = `${entry}wheels = [{ url = "https://example.com/prek.whl" }]\n`
+    const unsupported = `${entry}${source}\n`
+    await expect(resolve('pylock.toml', `lock-version = "1.0"\n${unsupported}`)).rejects.toThrow(
+      'Unsupported prek source',
+    )
+    await expect(
+      resolve('pylock.toml', `lock-version = "1.0"\n${supported}${unsupported}`),
+    ).rejects.toThrow('Unsupported prek source')
+    if (
+      source.startsWith('vcs') ||
+      source.startsWith('directory') ||
+      source.startsWith('archive')
+    ) {
+      await expect(
+        resolve('pylock.toml', `lock-version = "1.0"\n${supported}${source}`),
+      ).rejects.toThrow('Unsupported prek source')
+    }
+  })
+
+  it.each([
+    '"2.0"',
+    '"invalid"',
+    '1',
+  ])('rejects unsupported pylock format version %s', async version => {
+    await expect(resolve('pylock.toml', `lock-version = ${version}`)).rejects.toThrow(
+      'Unsupported pylock lock-version',
+    )
+  })
+
+  it('rejects a missing pylock format version', async () => {
+    await expect(resolve('pylock.toml', '')).rejects.toThrow('Unsupported pylock lock-version')
+  })
+
+  it.each([
+    'git = "https://example.com/fork.git"',
+    'hg = "https://example.com/fork"',
+    'svn = "https://example.com/fork"',
+    'bzr = "https://example.com/fork"',
+    'url = "https://example.com/prek.whl"',
+    'path = "../prek"',
+    'editable = true',
+    'subdirectory = "prek"',
+  ])('rejects unsupported PDM sources including mixed duplicates: %s', async source => {
+    const supported = '[[package]]\nname = "prek"\nversion = "0.3.5"\n'
+    const unsupported = `${supported}${source}\n`
+    await expect(resolve('pdm.lock', unsupported)).rejects.toThrow('Unsupported prek source')
+    await expect(resolve('pdm.lock', supported + unsupported)).rejects.toThrow(
+      'Unsupported prek source',
+    )
+  })
+
+  it('accepts PDM static registry artifact URLs and editable false', async () => {
+    expect(
+      await resolve(
+        'pdm.lock',
+        '[[package]]\nname = "prek"\nversion = "0.3.5"\neditable = false\nfiles = [{url = "https://mirror.example/prek.whl", hash = "sha256:abc"}]',
+      ),
+    ).toBe('0.3.5')
+  })
+
+  it.each([
+    'pylock..toml',
+    'pylock.ci.dev.toml',
+    'Pylock.toml',
+  ])('rejects unsupported pylock filename %s', async filename => {
+    await expect(resolve(filename, '')).rejects.toThrow('Unsupported version-file')
+  })
+
   it('reads the lockfile used by the CI install smoke test', async () => {
     const fixture = new URL('./fixtures/version-file/uv.lock', import.meta.url)
     expect(await resolve('uv.lock', await fs.readFile(fixture, 'utf8'))).toBe('0.2.30')

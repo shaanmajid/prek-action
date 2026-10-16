@@ -31,18 +31,60 @@ function unsupportedSource(source: string): never {
   )
 }
 
+function releaseArtifact(value: unknown): boolean {
+  const artifact = table(value)
+  return (
+    !('path' in artifact) && typeof artifact.url === 'string' && /^https?:\/\//i.test(artifact.url)
+  )
+}
+
+function registrySource(pkg: Table, filename: string): boolean {
+  if (/^pylock(?:\.[^.]+)?\.toml$/.test(filename)) {
+    const wheels = pkg.wheels
+    return (
+      !['vcs', 'directory', 'archive'].some(key => key in pkg) &&
+      (!('sdist' in pkg) || releaseArtifact(pkg.sdist)) &&
+      (!('wheels' in pkg) || (Array.isArray(wheels) && wheels.every(releaseArtifact))) &&
+      ('sdist' in pkg || (Array.isArray(wheels) && wheels.length > 0))
+    )
+  }
+  if (filename === 'poetry.lock') {
+    const source = table(pkg.source)
+    return (
+      !('source' in pkg) ||
+      (source.type === 'legacy' && typeof source.url === 'string' && source.url !== '')
+    )
+  }
+  if (filename === 'pdm.lock') {
+    return (
+      !['git', 'hg', 'svn', 'bzr', 'path', 'url', 'subdirectory'].some(key => key in pkg) &&
+      (!('editable' in pkg) || pkg.editable === false)
+    )
+  }
+  if (filename === 'uv.lock') {
+    return (
+      Object.keys(table(pkg.source)).length === 1 &&
+      typeof table(pkg.source).registry === 'string' &&
+      table(pkg.source).registry !== ''
+    )
+  }
+  return typeof pkg.source === 'string' && pkg.source.startsWith('registry+')
+}
+
 function lockedVersion(data: Table, source: string, filename: string): string {
-  const packages = Array.isArray(data.package) ? data.package : []
+  const pylock = /^pylock(?:\.[^.]+)?\.toml$/.test(filename)
+  if (
+    pylock &&
+    (typeof data['lock-version'] !== 'string' || !/^1\.\d+$/.test(data['lock-version']))
+  ) {
+    throw new Error(`Unsupported pylock lock-version in ${source}. Expected major version 1.`)
+  }
+  const entries = pylock ? data.packages : data.package
+  const packages = Array.isArray(entries) ? entries : []
   const versions = packages.flatMap(entry => {
     const pkg = table(entry)
     if (pkg.name !== 'prek') return []
-    const registry =
-      filename === 'uv.lock'
-        ? Object.keys(table(pkg.source)).length === 1 &&
-          typeof table(pkg.source).registry === 'string' &&
-          table(pkg.source).registry !== ''
-        : typeof pkg.source === 'string' && pkg.source.startsWith('registry+')
-    if (!registry) unsupportedSource(source)
+    if (!registrySource(pkg, filename)) unsupportedSource(source)
     if (typeof pkg.version !== 'string') {
       throw new Error(`Missing locked prek version in ${source}`)
     }
@@ -113,9 +155,13 @@ function pythonConstraint(data: Table, source: string): string {
 
 export async function resolveVersionFile(filePath: string): Promise<string> {
   const filename = path.basename(filePath)
-  if (!['uv.lock', 'pyproject.toml', 'Cargo.lock'].includes(filename)) {
+  const pylock = /^pylock(?:\.[^.]+)?\.toml$/.test(filename)
+  if (
+    !['uv.lock', 'poetry.lock', 'pdm.lock', 'pyproject.toml', 'Cargo.lock'].includes(filename) &&
+    !pylock
+  ) {
     throw new Error(
-      `Unsupported version-file: ${filename}. Use uv.lock, pyproject.toml, or Cargo.lock.`,
+      `Unsupported version-file: ${filename}. Use uv.lock, poetry.lock, pdm.lock, pylock.toml (or pylock.<name>.toml), pyproject.toml, or Cargo.lock.`,
     )
   }
   let data: Table
@@ -127,7 +173,7 @@ export async function resolveVersionFile(filePath: string): Promise<string> {
     )
   }
   core.info(`Reading prek version from ${filePath}`)
-  if (filename.endsWith('.lock')) return lockedVersion(data, filePath, filename)
+  if (filename.endsWith('.lock') || pylock) return lockedVersion(data, filePath, filename)
 
   const constraint = pythonConstraint(data, filePath)
   const exact = constraint.match(/^==\s*([^,\s]+)$/)?.[1]
