@@ -105,6 +105,16 @@ describe('run', () => {
     expect(mockContext.failures).toEqual([])
   })
 
+  it('uses the configured working directory for cache, execution, logs, and pruning', async () => {
+    mockContext.inputs.showVerboseLogs = true
+    const { run } = await importMainModule()
+    await run()
+    expect(dependencyMocks.restorePrekCache).toHaveBeenCalledWith('/tmp/repo')
+    expect(dependencyMocks.runPrek).toHaveBeenCalledWith('/tmp/repo', '--all-files')
+    expect(dependencyMocks.showVerboseLogs).toHaveBeenCalledWith('/tmp/repo')
+    expect(dependencyMocks.pruneCache).toHaveBeenCalledWith('/tmp/repo')
+  })
+
   it('skips cache restore and sets cache-hit=false when cache is disabled', async () => {
     mockContext.inputs.cache = false
 

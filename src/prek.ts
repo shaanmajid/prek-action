@@ -22,10 +22,10 @@ export async function runPrek(workingDirectory: string, extraArgs: string): Prom
   })
 }
 
-export async function showVerboseLogs(): Promise<void> {
+export async function showVerboseLogs(workingDirectory?: string): Promise<void> {
   core.startGroup('Prek verbose logs')
   try {
-    const cacheDir = await getPrekCacheDir()
+    const cacheDir = await getPrekCacheDir(workingDirectory)
     const logPath = path.join(cacheDir, 'prek.log')
     try {
       const log = await fs.readFile(logPath, 'utf8')
@@ -41,10 +41,11 @@ export async function showVerboseLogs(): Promise<void> {
   }
 }
 
-export async function pruneCache(): Promise<void> {
+export async function pruneCache(workingDirectory?: string): Promise<void> {
   core.startGroup('Pruning prek cache')
   try {
     const code = await exec.exec('prek', ['cache', 'gc', '-v'], {
+      cwd: workingDirectory,
       ignoreReturnCode: true,
     })
     if (code !== 0) {
@@ -55,11 +56,12 @@ export async function pruneCache(): Promise<void> {
   }
 }
 
-export async function getPrekCacheDir(): Promise<string> {
+export async function getPrekCacheDir(workingDirectory?: string): Promise<string> {
   let output = ''
   let code: number
   try {
     code = await exec.exec('prek', ['cache', 'dir', '--no-log-file', '--color=never'], {
+      cwd: workingDirectory,
       ignoreReturnCode: true,
       listeners: {
         stdout: (data: Buffer) => {
@@ -70,7 +72,7 @@ export async function getPrekCacheDir(): Promise<string> {
     })
   } catch (error) {
     core.info(`Failed to query prek cache dir: ${formatError(error)}`)
-    return getDefaultPrekCacheDir()
+    return getDefaultPrekCacheDir(workingDirectory)
   }
 
   if (code === 0) {
@@ -81,7 +83,7 @@ export async function getPrekCacheDir(): Promise<string> {
     }
   }
 
-  return getDefaultPrekCacheDir()
+  return getDefaultPrekCacheDir(workingDirectory)
 }
 
 // Guess the prek cache directory using the same resolution order as the prek
@@ -91,13 +93,14 @@ export async function getPrekCacheDir(): Promise<string> {
 // `--no-log-file` in v0.2.3, so the CLI probe fails on older versions.
 // Consider removing this (and dropping <v0.2.2 from the version manifest)
 // once those versions are no longer in use.
-function getDefaultPrekCacheDir(): string {
+function getDefaultPrekCacheDir(workingDirectory = process.cwd()): string {
   // PREK_HOME is used as-is (no /prek suffix), matching prek's own behavior.
   const prekHome = process.env.PREK_HOME
   if (prekHome) {
-    const fallback = prekHome.startsWith('~/')
-      ? path.join(os.homedir(), prekHome.slice(2))
-      : prekHome
+    const fallback = path.resolve(
+      workingDirectory,
+      prekHome.startsWith('~/') ? path.join(os.homedir(), prekHome.slice(2)) : prekHome,
+    )
     core.info(`Falling back to default prek cache dir ${fallback}`)
     return fallback
   }

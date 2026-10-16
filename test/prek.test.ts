@@ -18,6 +18,8 @@ const toolkitMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@actions/core', () => ({
+  startGroup: vi.fn(),
+  endGroup: vi.fn(),
   info: vi.fn((message: string) => {
     mockContext.infos.push(message)
   }),
@@ -27,7 +29,7 @@ vi.mock('@actions/exec', () => ({
   exec: toolkitMocks.exec,
 }))
 
-const { getPrekCacheDir } = await import('../src/prek')
+const { getPrekCacheDir, pruneCache } = await import('../src/prek')
 
 describe('getPrekCacheDir', () => {
   beforeEach(() => {
@@ -49,6 +51,36 @@ describe('getPrekCacheDir', () => {
       expect.any(Object),
     )
     expect(mockContext.infos).toEqual(['Using prek cache dir /tmp/prek-cache'])
+  })
+
+  it('queries and prunes the cache in the same directory as prek run', async () => {
+    const workingDirectory = path.join(os.tmpdir(), 'project')
+    await getPrekCacheDir(workingDirectory)
+    expect(toolkitMocks.exec).toHaveBeenCalledWith(
+      'prek',
+      ['cache', 'dir', '--no-log-file', '--color=never'],
+      expect.objectContaining({ cwd: workingDirectory }),
+    )
+    await pruneCache(workingDirectory)
+    expect(toolkitMocks.exec).toHaveBeenCalledWith(
+      'prek',
+      ['cache', 'gc', '-v'],
+      expect.objectContaining({ cwd: workingDirectory }),
+    )
+  })
+
+  it('resolves a relative PREK_HOME against the working directory in the fallback', async () => {
+    const originalEnv = { ...process.env }
+    process.env.PREK_HOME = '.prek-cache'
+    toolkitMocks.exec.mockResolvedValue(2)
+    const workingDirectory = path.join(os.tmpdir(), 'project')
+    try {
+      await expect(getPrekCacheDir(workingDirectory)).resolves.toBe(
+        path.join(workingDirectory, '.prek-cache'),
+      )
+    } finally {
+      process.env = originalEnv
+    }
   })
 
   it('falls back to PREK_HOME when the CLI probe fails', async () => {
