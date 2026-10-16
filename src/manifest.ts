@@ -102,7 +102,7 @@ export function resolveVersionFromManifest(
 
   const range = semver.validRange(normalizedInput)
   if (!range) {
-    throw new Error(`Invalid prek-version input: ${versionInput}`)
+    throw new Error(`Invalid version input: ${versionInput}`)
   }
 
   const rangeRelease = manifest.find(

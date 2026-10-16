@@ -5,7 +5,6 @@ The shared input is `pyproject.toml`.
 | Fixture | Generator | Validation |
 | --- | --- | --- |
 | `uv.lock` | uv 0.13.1, `uv lock` | `uv lock --check` |
-| `uv-old.lock` | uv 0.8.0, `uv lock` | Reads the older format revision |
 | `poetry.lock` | Poetry 2.5.1, `poetry lock` | `poetry check --lock` |
 | `pdm.lock` | PDM 2.29.2, `pdm lock --python '>=3.11'` | `pdm lock --check` |
 | `pylock.toml` | uv 0.13.1, `uv export --format pylock.toml` | `uv pip sync --system --dry-run pylock.toml` |

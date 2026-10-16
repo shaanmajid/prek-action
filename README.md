@@ -32,7 +32,8 @@ For v2 and earlier releases, major and minor tags such as `v2` and `v2.0` are mo
 | --- | --- | --- | --- |
 | `extra-args` | Additional arguments appended to `prek run --show-diff-on-failure --color=always` | No | `--all-files` |
 | `extra_args` | Deprecated alias for `extra-args` | No | |
-| `prek-version` | Version or semver range to install, for example `0.2.30`, `0.3.x`, `<=1.0.0`, or `latest`; overrides `version-file` | No | `version-file` if supplied, otherwise `latest` |
+| `version` | Version or semver range to install, for example `0.5.5`, `0.5.x`, `<=1.0.0`, or `latest`; overrides `version-file` | No | `version-file` if supplied, otherwise `latest` |
+| `prek-version` | Deprecated alias for `version` | No | |
 | `version-file` | Read prek's version from `uv.lock`, `poetry.lock`, `pdm.lock`, `pylock.toml` (including `pylock.<name>.toml`), or `pyproject.toml`, relative to `working-directory` | No | |
 | `install-only` | Install `prek` but skip `prek run` | No | `false` |
 | `working-directory` | Directory where `prek run` is executed | No | `.` |
@@ -67,24 +68,18 @@ steps:
       extra-args: '--all-files --directory packages/'
 ```
 
-Pin a specific `prek` version:
+Pin a specific `prek` version (using an action release with the new `version` input):
 
 ```yaml
-steps:
-  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
-    with:
-      prek-version: '0.2.30'
+with:
+  version: '0.5.5'
 ```
 
 Resolve a semver range:
 
 ```yaml
-steps:
-  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
-    with:
-      prek-version: '0.3.x'
+with:
+  version: '0.5.x'
 ```
 
 Reuse a project version:
@@ -94,8 +89,10 @@ with:
   version-file: uv.lock
 ```
 
-`prek-version` takes precedence, including an explicit `latest`. If neither input is
-set, the action installs the latest version. Files are read only when explicitly
+An explicit `version` (or deprecated `prek-version`) takes precedence over
+`version-file`, with a warning that the file is ignored. Conflicting `version` and
+`prek-version` values are an error. If neither a version nor a file is supplied,
+the action installs the latest version. Files are read only when explicitly
 selected; relative paths start at `working-directory`.
 
 Lockfiles must contain one unique prek version from a package registry, including
@@ -108,11 +105,11 @@ the official prek binary, rather than using the lockfile's artifact URLs or hash
 using PEP 440 specifiers. Direct URL dependencies and uv source overrides other
 than an unconditional index selection are unsupported.
 Prek entries in uv's `override-dependencies` are also unsupported; use `uv.lock`
-or set `prek-version` explicitly instead.
+or set `version` explicitly instead.
 
 Manifest requirements select the highest matching stable release. Distinct
 constraints across dependency groups and conditional Python dependencies require
-an explicit `prek-version` or an unambiguous lockfile. The action does not resolve
+an explicit `version` or an unambiguous lockfile. The action does not resolve
 Python environment markers or search other files.
 Missing or malformed files, missing prek entries, and unsupported or ambiguous
 requirements fail with an error; they never fall back to installing latest.

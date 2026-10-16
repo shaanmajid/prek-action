@@ -10,6 +10,9 @@ describe('action metadata', () => {
     const actionYaml = await readActionYaml()
 
     expect(actionYaml).toMatch(
+      / {2}prek-version:\n(?: {4}[^\n]*\n)*? {4}deprecationMessage: The prek-version input has been renamed to version\./,
+    )
+    expect(actionYaml).toMatch(
       /extra_args:\n(?:.*\n)*?\s+deprecationMessage: The extra_args input has been renamed to extra-args\. Update your workflow\./,
     )
     expect(actionYaml).toMatch(

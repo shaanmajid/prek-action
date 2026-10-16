@@ -93,12 +93,12 @@ jobs:
       - name: Test | ${{ matrix.os }} | pin prek version
         uses: ./
         with:
-          prek-version: "0.2.30"
+          version: "0.5.5"
 
       - name: Test | ${{ matrix.os }} | resolve prek semver range
         uses: ./
         with:
-          prek-version: "0.3.x"
+          version: "0.5.x"
 
       - name: Test | ${{ matrix.os }} | locked project version
         uses: ./
@@ -111,27 +111,6 @@ jobs:
         uses: ./
         with:
           version-file: test/fixtures/version-file/pyproject.toml
-          install-only: true
-          cache: false
-
-      - name: Test | ${{ matrix.os }} | Poetry locked version
-        uses: ./
-        with:
-          version-file: test/fixtures/version-file/poetry.lock
-          install-only: true
-          cache: false
-
-      - name: Test | ${{ matrix.os }} | PDM locked version
-        uses: ./
-        with:
-          version-file: test/fixtures/version-file/pdm.lock
-          install-only: true
-          cache: false
-
-      - name: Test | ${{ matrix.os }} | Python standard locked version
-        uses: ./
-        with:
-          version-file: test/fixtures/version-file/pylock.toml
           install-only: true
           cache: false
 

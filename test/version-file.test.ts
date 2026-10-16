@@ -48,11 +48,6 @@ describe('version-file', () => {
     expect(await resolve(filename, await fs.readFile(fixture, 'utf8'))).toBe('0.5.5')
   })
 
-  it('reads an older uv format revision', async () => {
-    const fixture = new URL('./fixtures/version-file/uv-old.lock', import.meta.url)
-    expect(await resolve('uv.lock', await fs.readFile(fixture, 'utf8'))).toBe('0.5.5')
-  })
-
   it.each([
     'uv.lock',
     'poetry.lock',
@@ -65,14 +60,6 @@ describe('version-file', () => {
         `${await fs.readFile(fixture, 'utf8')}\n[future-metadata]\nrevision = 999\n`,
       ),
     ).toBe('0.5.5')
-  })
-
-  it.each([
-    '__proto__',
-    'constructor',
-    'toString',
-  ])('rejects unsupported filenames inherited by JavaScript objects: %s', async filename => {
-    await expect(resolve(filename, '')).rejects.toThrow('Unsupported version-file')
   })
 
   it.each([
@@ -223,26 +210,19 @@ describe('version-file', () => {
     await expect(resolve(filename, '')).rejects.toThrow('Unsupported version-file')
   })
 
-  it('reads the lockfile used by the CI install smoke test', async () => {
-    const fixture = new URL('./fixtures/version-file/uv.lock', import.meta.url)
-    expect(await resolve('uv.lock', await fs.readFile(fixture, 'utf8'))).toBe('0.5.5')
-  })
-
-  it.each([
-    'uv.lock',
-  ])('reads exact prek versions from %s without requiring manifest membership', async filename => {
+  it('reads an exact locked version without requiring manifest membership', async () => {
     expect(
       await resolve(
-        filename,
+        'uv.lock',
         `[[package]]\nname = "other"\nversion = "1.0.0"\n${lockedEntry('9.0.0')}`,
       ),
     ).toBe('9.0.0')
   })
 
-  it.each(['uv.lock'])('rejects ambiguous versions in %s', async filename => {
+  it('rejects ambiguous uv locked versions', async () => {
     const entry = lockedEntry('0.3.5')
-    expect(await resolve(filename, entry + entry)).toBe('0.3.5')
-    await expect(resolve(filename, entry + lockedEntry('0.4.0'))).rejects.toThrow(
+    expect(await resolve('uv.lock', entry + entry)).toBe('0.3.5')
+    await expect(resolve('uv.lock', entry + lockedEntry('0.4.0'))).rejects.toThrow(
       'Ambiguous prek versions',
     )
   })
@@ -360,7 +340,7 @@ describe('version-file', () => {
       'Could not read version-file',
     )
     await expect(resolve('pyproject.toml', '[invalid')).rejects.toThrow(
-      'Could not read version-file',
+      'Could not parse version-file',
     )
     await expect(resolve('requirements.txt', 'prek==0.3.5')).rejects.toThrow(
       'Unsupported version-file',

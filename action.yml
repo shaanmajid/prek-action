@@ -17,11 +17,15 @@ inputs:
     description: Only install prek, do not run it
     required: false
     default: "false"
+  version:
+    description: Version or semver range of prek to install (for example `0.5.5`, `0.5.x`, `<=1.0.0`, or `latest`). Defaults to version-file when supplied, otherwise latest.
+    required: false
   prek-version:
-    description: Version or semver range of prek to install (for example `0.2.1`, `0.3.x`, `<=1.0.0`, or `latest`). Defaults to version-file when supplied, otherwise latest.
+    description: Deprecated alias for version.
+    deprecationMessage: The prek-version input has been renamed to version. Update your workflow.
     required: false
   version-file:
-    description: Path to uv.lock, poetry.lock, pdm.lock, pylock.toml (or pylock.<name>.toml), or pyproject.toml containing a prek version. Relative to working-directory; prek-version takes precedence.
+    description: Path to uv.lock, poetry.lock, pdm.lock, pylock.toml (or pylock.<name>.toml), or pyproject.toml containing a prek version. Relative to working-directory; an explicit version takes precedence.
     required: false
   show-verbose-logs:
     description: Whether to print the prek verbose log after `prek run`

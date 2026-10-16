@@ -12,7 +12,7 @@ function pythonConstraint(data: Table, source: string): string {
     )
   ) {
     throw new Error(
-      `prek dependency overrides in ${source} are unsupported. Use uv.lock or set prek-version explicitly.`,
+      `prek dependency overrides in ${source} are unsupported. Use uv.lock or set version explicitly.`,
     )
   }
   const sources = table(uv.sources)
@@ -49,7 +49,7 @@ function pythonConstraint(data: Table, source: string): string {
             .trim()
           if (constraint.includes(';')) {
             throw new Error(
-              `Conditional prek dependencies in ${source} are unsupported. Use uv.lock or set prek-version explicitly.`,
+              `Conditional prek dependencies in ${source} are unsupported. Use uv.lock or set version explicitly.`,
             )
           }
           if (constraint && !validRange(constraint)) {

@@ -11,7 +11,7 @@ export function unique(values: string[], source: string): string {
   if (versions.length === 0) throw new Error(`No prek version found in ${source}`)
   if (versions.length > 1) {
     throw new Error(
-      `Ambiguous prek versions or constraints in ${source}: ${versions.join(', ')}. Set prek-version explicitly.`,
+      `Ambiguous prek versions or constraints in ${source}: ${versions.join(', ')}. Set version explicitly.`,
     )
   }
   return versions[0]
@@ -19,6 +19,6 @@ export function unique(values: string[], source: string): string {
 
 export function unsupportedSource(source: string): never {
   throw new Error(
-    `Unsupported prek source in ${source}. version-file selects an official prek release; set prek-version explicitly for the release you want.`,
+    `Unsupported prek source in ${source}. version-file selects an official prek release; set version explicitly for the release you want.`,
   )
 }

@@ -9219,7 +9219,7 @@ var require_retry_handler = __commonJS({
       static {
         __name(this, "RetryHandler");
       }
-      constructor(opts, handlers) {
+      constructor(opts, handlers2) {
         const { retryOptions, ...dispatchOpts } = opts;
         const {
           // Retry scoped
@@ -9234,8 +9234,8 @@ var require_retry_handler = __commonJS({
           retryAfter,
           statusCodes
         } = retryOptions ?? {};
-        this.dispatch = handlers.dispatch;
-        this.handler = handlers.handler;
+        this.dispatch = handlers2.dispatch;
+        this.handler = handlers2.handler;
         this.opts = { ...dispatchOpts, body: wrapRequestBody(opts.body) };
         this.abort = null;
         this.aborted = false;
@@ -28621,7 +28621,7 @@ var HttpClient = class {
   static {
     __name(this, "HttpClient");
   }
-  constructor(userAgent2, handlers, requestOptions) {
+  constructor(userAgent2, handlers2, requestOptions) {
     this._ignoreSslError = false;
     this._allowRedirects = true;
     this._allowRedirectDowngrade = false;
@@ -28631,7 +28631,7 @@ var HttpClient = class {
     this._keepAlive = false;
     this._disposed = false;
     this.userAgent = this._getUserAgentWithOrchestrationId(userAgent2);
-    this.handlers = handlers || [];
+    this.handlers = handlers2 || [];
     this.requestOptions = requestOptions;
     if (requestOptions) {
       if (requestOptions.ignoreSslError != null) {
@@ -67388,11 +67388,16 @@ __name(getConfigPatterns, "getConfigPatterns");
 function getInputs() {
   const legacyExtraArgs = getInput("extra_args");
   const modernExtraArgs = getInput("extra-args");
+  const version3 = getInput("version");
+  const legacyVersion = getInput("prek-version");
+  if (version3 && legacyVersion && version3 !== legacyVersion) {
+    throw new Error("version and prek-version have different values. Set only version.");
+  }
   return {
     cache: getBooleanInput("cache"),
     extraArgs: legacyExtraArgs || modernExtraArgs,
     installOnly: getBooleanInput("install-only"),
-    prekVersion: getInput("prek-version"),
+    prekVersion: version3 || legacyVersion,
     showVerboseLogs: getBooleanInput("show-verbose-logs"),
     versionFile: getInput("version-file"),
     workingDirectory: getInput("working-directory") || "."
@@ -69177,7 +69182,7 @@ function resolveVersionFromManifest(versionInput, manifest) {
   }
   const range3 = semver4.validRange(normalizedInput);
   if (!range3) {
-    throw new Error(`Invalid prek-version input: ${versionInput}`);
+    throw new Error(`Invalid version input: ${versionInput}`);
   }
   const rangeRelease = manifest.find(
     (candidate) => !candidate.prerelease && semver4.satisfies(candidate.version, range3)
@@ -70120,9 +70125,9 @@ function validateTablePeek(ctx, peek, ptr) {
     TomlError.x(peek === null ? "trying to redefine an already defined table or value" : "document contains an unsafe property", ctx, ptr);
 }
 __name(validateTablePeek, "validateTablePeek");
-function parse2(toml, options = {}) {
+function parse2(toml2, options = {}) {
   let ctx = {
-    s: toml,
+    s: toml2,
     p: 0,
     d: options.maxDepth ?? 1e3,
     bi: options.integersAsBigInt ?? false,
@@ -70135,12 +70140,12 @@ function parse2(toml, options = {}) {
   let skipping = false;
   let tbl = res;
   let m = meta;
-  if (toml.charCodeAt(0) === 65279)
+  if (toml2.charCodeAt(0) === 65279)
     ctx.p++;
   skipVoid(ctx);
-  while (ctx.p < toml.length) {
-    if (toml.charCodeAt(ctx.p) === 91) {
-      let isTableArray = toml.charCodeAt(++ctx.p) === 91;
+  while (ctx.p < toml2.length) {
+    if (toml2.charCodeAt(ctx.p) === 91) {
+      let isTableArray = toml2.charCodeAt(++ctx.p) === 91;
       tmp = ctx.p += +isTableArray;
       skipping = false;
       let k = parseKey(
@@ -70149,7 +70154,7 @@ function parse2(toml, options = {}) {
         /* ] */
       );
       if (isTableArray) {
-        if (toml.charCodeAt(ctx.p) !== 93) {
+        if (toml2.charCodeAt(ctx.p) !== 93) {
           TomlError.x("expected end of table array declaration", ctx);
         }
         ctx.p++;
@@ -70188,7 +70193,7 @@ function parse2(toml, options = {}) {
         p[1][p[0]] = v;
     }
     skipVoid(ctx, true);
-    if (ctx.p < toml.length && (tmp = toml.charCodeAt(ctx.p)) !== 10 && (tmp !== 13 || toml.charCodeAt(ctx.p + 1) !== 10)) {
+    if (ctx.p < toml2.length && (tmp = toml2.charCodeAt(ctx.p)) !== 10 && (tmp !== 13 || toml2.charCodeAt(ctx.p + 1) !== 10)) {
       TomlError.x("each key-value declaration must be followed by an end-of-line", ctx);
     }
     skipVoid(ctx);
@@ -70644,7 +70649,7 @@ function unique(values, source) {
   if (versions.length === 0) throw new Error(`No prek version found in ${source}`);
   if (versions.length > 1) {
     throw new Error(
-      `Ambiguous prek versions or constraints in ${source}: ${versions.join(", ")}. Set prek-version explicitly.`
+      `Ambiguous prek versions or constraints in ${source}: ${versions.join(", ")}. Set version explicitly.`
     );
   }
   return versions[0];
@@ -70652,7 +70657,7 @@ function unique(values, source) {
 __name(unique, "unique");
 function unsupportedSource(source) {
   throw new Error(
-    `Unsupported prek source in ${source}. version-file selects an official prek release; set prek-version explicitly for the release you want.`
+    `Unsupported prek source in ${source}. version-file selects an official prek release; set version explicitly for the release you want.`
   );
 }
 __name(unsupportedSource, "unsupportedSource");
@@ -70664,7 +70669,7 @@ function pythonConstraint(data, source) {
     (dep) => typeof dep === "string" && /^prek(?:\[[^\]]*\])?(?=\s|[<>=!~;(@]|$)/i.test(dep.trim())
   )) {
     throw new Error(
-      `prek dependency overrides in ${source} are unsupported. Use uv.lock or set prek-version explicitly.`
+      `prek dependency overrides in ${source} are unsupported. Use uv.lock or set version explicitly.`
     );
   }
   const sources = table(uv.sources);
@@ -70694,7 +70699,7 @@ function pythonConstraint(data, source) {
       const constraint = match4[1].trim().replace(/^\((.*)\)$/, "$1").trim();
       if (constraint.includes(";")) {
         throw new Error(
-          `Conditional prek dependencies in ${source} are unsupported. Use uv.lock or set prek-version explicitly.`
+          `Conditional prek dependencies in ${source} are unsupported. Use uv.lock or set version explicitly.`
         );
       }
       if (constraint && !validRange2(constraint)) {
@@ -70719,57 +70724,49 @@ async function resolvePythonVersion(data, filePath) {
 __name(resolvePythonVersion, "resolvePythonVersion");
 
 // src/version-file.ts
-var formats = /* @__PURE__ */ new Map([
-  ["uv.lock", "uv"],
-  ["poetry.lock", "poetry"],
-  ["pdm.lock", "pdm"],
-  ["pyproject.toml", "pyproject"]
-]);
-function fileFormat(filename) {
-  const format = formats.get(filename) ?? (/^pylock(?:\.[^.]+)?\.toml$/.test(filename) ? "pylock" : void 0);
-  if (!format) {
-    throw new Error(
-      `Unsupported version-file: ${filename}. Use uv.lock, poetry.lock, pdm.lock, pylock.toml (or pylock.<name>.toml), or pyproject.toml.`
-    );
-  }
-  return format;
-}
-__name(fileFormat, "fileFormat");
 function releaseArtifact(value) {
   const artifact = table(value);
   return !("path" in artifact) && typeof artifact.url === "string" && /^https?:\/\//i.test(artifact.url);
 }
 __name(releaseArtifact, "releaseArtifact");
-function registrySource(pkg, format) {
-  if (format === "pylock") {
-    const wheels = pkg.wheels;
-    return !["vcs", "directory", "archive"].some((key) => key in pkg) && (!("sdist" in pkg) || releaseArtifact(pkg.sdist)) && (!("wheels" in pkg) || Array.isArray(wheels) && wheels.every(releaseArtifact)) && ("sdist" in pkg || Array.isArray(wheels) && wheels.length > 0);
-  }
-  if (format === "poetry") {
-    const source = table(pkg.source);
-    return !("source" in pkg) || source.type === "legacy" && typeof source.url === "string" && source.url !== "";
-  }
-  if (format === "pdm") {
-    return !["git", "hg", "svn", "bzr", "path", "url", "subdirectory"].some((key) => key in pkg) && (!("editable" in pkg) || pkg.editable === false);
-  }
-  if (format === "uv") {
-    const source = table(pkg.source);
-    return Object.keys(source).length === 1 && typeof source.registry === "string" && source.registry !== "";
-  }
-  return false;
-}
-__name(registrySource, "registrySource");
-function lockedVersion(data, source, format) {
-  const pylock = format === "pylock";
-  if (pylock && (typeof data["lock-version"] !== "string" || !/^1\.\d+$/.test(data["lock-version"]))) {
+function resolvePylock(data, source) {
+  if (typeof data["lock-version"] !== "string" || !/^1\.\d+$/.test(data["lock-version"])) {
     throw new Error(`Unsupported pylock lock-version in ${source}. Expected major version 1.`);
   }
-  const entries = pylock ? data.packages : data.package;
+  return lockedVersion(data.packages, source, (pkg) => {
+    const wheels = pkg.wheels;
+    return !["vcs", "directory", "archive"].some((key) => key in pkg) && (!("sdist" in pkg) || releaseArtifact(pkg.sdist)) && (!("wheels" in pkg) || Array.isArray(wheels) && wheels.every(releaseArtifact)) && ("sdist" in pkg || Array.isArray(wheels) && wheels.length > 0);
+  });
+}
+__name(resolvePylock, "resolvePylock");
+function resolvePoetry(data, source) {
+  return lockedVersion(data.package, source, (pkg) => {
+    const pkgSource = table(pkg.source);
+    return !("source" in pkg) || pkgSource.type === "legacy" && typeof pkgSource.url === "string" && pkgSource.url !== "";
+  });
+}
+__name(resolvePoetry, "resolvePoetry");
+function resolvePdm(data, source) {
+  return lockedVersion(
+    data.package,
+    source,
+    (pkg) => !["git", "hg", "svn", "bzr", "path", "url", "subdirectory"].some((key) => key in pkg) && (!("editable" in pkg) || pkg.editable === false)
+  );
+}
+__name(resolvePdm, "resolvePdm");
+function resolveUv(data, source) {
+  return lockedVersion(data.package, source, (pkg) => {
+    const pkgSource = table(pkg.source);
+    return Object.keys(pkgSource).length === 1 && typeof pkgSource.registry === "string" && pkgSource.registry !== "";
+  });
+}
+__name(resolveUv, "resolveUv");
+function lockedVersion(entries, source, registrySource) {
   const packages = Array.isArray(entries) ? entries : [];
   const versions = packages.flatMap((entry) => {
     const pkg = table(entry);
     if (pkg.name !== "prek") return [];
-    if (!registrySource(pkg, format)) unsupportedSource(source);
+    if (!registrySource(pkg)) unsupportedSource(source);
     if (typeof pkg.version !== "string") {
       throw new Error(`Missing locked prek version in ${source}`);
     }
@@ -70781,18 +70778,45 @@ function lockedVersion(data, source, format) {
   return version3;
 }
 __name(lockedVersion, "lockedVersion");
+function toml(resolve4) {
+  return (content, source) => {
+    let data;
+    try {
+      data = parse2(content);
+    } catch (error2) {
+      throw new Error(
+        `Could not parse version-file ${source}: ${error2 instanceof Error ? error2.message : String(error2)}`
+      );
+    }
+    return resolve4(data, source);
+  };
+}
+__name(toml, "toml");
+var handlers = [
+  { filename: /^uv\.lock$/, resolve: toml(resolveUv) },
+  { filename: /^poetry\.lock$/, resolve: toml(resolvePoetry) },
+  { filename: /^pdm\.lock$/, resolve: toml(resolvePdm) },
+  { filename: /^pylock(?:\.[^.]+)?\.toml$/, resolve: toml(resolvePylock) },
+  { filename: /^pyproject\.toml$/, resolve: toml(resolvePythonVersion) }
+];
 async function resolveVersionFile(filePath) {
-  const format = fileFormat(path21.basename(filePath));
-  let data;
+  const filename = path21.basename(filePath);
+  const handler = handlers.find((handler2) => handler2.filename.test(filename));
+  if (!handler) {
+    throw new Error(
+      `Unsupported version-file: ${filename}. Use uv.lock, poetry.lock, pdm.lock, pylock.toml (or pylock.<name>.toml), or pyproject.toml.`
+    );
+  }
+  let content;
   try {
-    data = parse2(await fs14.readFile(filePath, "utf8"));
+    content = await fs14.readFile(filePath, "utf8");
   } catch (error2) {
     throw new Error(
       `Could not read version-file ${filePath}: ${error2 instanceof Error ? error2.message : String(error2)}`
     );
   }
   info(`Reading prek version from ${filePath}`);
-  return format === "pyproject" ? resolvePythonVersion(data, filePath) : lockedVersion(data, filePath, format);
+  return handler.resolve(content, filePath);
 }
 __name(resolveVersionFile, "resolveVersionFile");
 
@@ -70801,7 +70825,7 @@ async function run() {
   const inputs = getInputs();
   startGroup("Resolving prek version");
   if (inputs.prekVersion && inputs.versionFile) {
-    info("prek-version takes precedence; ignoring version-file");
+    warning("An explicit version was supplied; ignoring version-file.");
   }
   const versionInput = inputs.prekVersion || (inputs.versionFile ? await resolveVersionFile(path22.resolve(inputs.workingDirectory, inputs.versionFile)) : "latest");
   const version3 = await resolveVersion(versionInput);

@@ -40,11 +40,28 @@ describe('getInputs', () => {
     expect(getInputs().extraArgs).toBe('--all-files')
   })
 
-  it('preserves omitted prek-version so version-file can be selected', async () => {
+  it('preserves an omitted version so version-file can be selected', async () => {
     mockContext.inputs['version-file'] = 'uv.lock'
     const { getInputs } = await importInputsModule()
     expect(getInputs().prekVersion).toBe('')
     expect(getInputs().versionFile).toBe('uv.lock')
+  })
+
+  it.each([
+    { version: '0.5.5' },
+    { 'prek-version': '0.5.5' },
+    { 'prek-version': '0.5.5', version: '0.5.5' },
+  ])('accepts canonical and compatible legacy version inputs: %j', async inputs => {
+    Object.assign(mockContext.inputs, inputs)
+    const { getInputs } = await importInputsModule()
+    expect(getInputs().prekVersion).toBe('0.5.5')
+  })
+
+  it('rejects conflicting version aliases', async () => {
+    mockContext.inputs.version = 'latest'
+    mockContext.inputs['prek-version'] = '0.5.5'
+    const { getInputs } = await importInputsModule()
+    expect(() => getInputs()).toThrow('version and prek-version have different values')
   })
 
   it('does not emit a runtime warning for extra_args (deprecationMessage handles it)', async () => {
