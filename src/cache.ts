@@ -1,5 +1,3 @@
-import * as crypto from 'node:crypto'
-import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as cache from '@actions/cache'
 import * as core from '@actions/core'
@@ -24,7 +22,7 @@ function formatError(error: unknown): string {
 export async function restorePrekCache(workingDirectory: string): Promise<RestorePrekCacheResult> {
   core.startGroup('Restore prek cache')
 
-  const cacheDir = await getPrekCacheDir()
+  const cacheDir = await getPrekCacheDir(workingDirectory)
   const paths = [cacheDir]
   const primaryKey = await buildCacheKey(workingDirectory)
   core.saveState(CACHE_KEY_STATE, primaryKey)
@@ -93,24 +91,11 @@ async function buildCacheKey(workingDirectory: string): Promise<string> {
 }
 
 async function hashConfigFiles(workingDirectory: string): Promise<string> {
-  const matcher = await glob.create(getConfigPatterns(workingDirectory).join('\n'))
-  const files = await matcher.glob()
-  if (files.length === 0) {
-    return 'no-config'
-  }
-
-  const digest = crypto.createHash('sha256')
-  for (const file of files.sort()) {
-    digest.update(path.relative(workingDirectory, file))
-    digest.update('\0')
-    digest.update(
-      crypto
-        .createHash('sha256')
-        .update(await fs.readFile(file))
-        .digest(),
-    )
-  }
-  return digest.digest('hex')
+  return (
+    (await glob.hashFiles(getConfigPatterns(workingDirectory).join('\n'), workingDirectory, {
+      followSymbolicLinks: false,
+    })) || 'no-config'
+  )
 }
 
 function getConfigPatterns(workingDirectory: string): string[] {

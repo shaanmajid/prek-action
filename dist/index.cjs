@@ -45,7 +45,7 @@ var require_tunnel = __commonJS({
     var https3 = require("https");
     var events2 = require("events");
     var assert7 = require("assert");
-    var util6 = require("util");
+    var util7 = require("util");
     exports2.httpOverHttp = httpOverHttp2;
     exports2.httpsOverHttp = httpsOverHttp2;
     exports2.httpOverHttps = httpOverHttps2;
@@ -100,7 +100,7 @@ var require_tunnel = __commonJS({
       }, "onFree"));
     }
     __name(TunnelingAgent, "TunnelingAgent");
-    util6.inherits(TunnelingAgent, events2.EventEmitter);
+    util7.inherits(TunnelingAgent, events2.EventEmitter);
     TunnelingAgent.prototype.addRequest = /* @__PURE__ */ __name(function addRequest(req, host, port, localAddress) {
       var self2 = this;
       var options = mergeOptions({ request: req }, self2.options, toOptions(host, port, localAddress));
@@ -1057,7 +1057,7 @@ var require_util = __commonJS({
     var assert7 = require("node:assert");
     var { kDestroyed, kBodyUsed, kListeners, kBody } = require_symbols();
     var { IncomingMessage } = require("node:http");
-    var stream3 = require("node:stream");
+    var stream4 = require("node:stream");
     var net = require("node:net");
     var { Blob: Blob2 } = require("node:buffer");
     var nodeUtil = require("node:util");
@@ -1176,14 +1176,14 @@ var require_util = __commonJS({
         }
         const port = url2.port != null ? url2.port : url2.protocol === "https:" ? 443 : 80;
         let origin = url2.origin != null ? url2.origin : `${url2.protocol || ""}//${url2.hostname || ""}:${port}`;
-        let path21 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
+        let path22 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path21 && path21[0] !== "/") {
-          path21 = `/${path21}`;
+        if (path22 && path22[0] !== "/") {
+          path22 = `/${path22}`;
         }
-        return new URL(`${origin}${path21}`);
+        return new URL(`${origin}${path22}`);
       }
       if (!isHttpOrHttpsPrefixed(url2.origin || url2.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -1249,25 +1249,25 @@ var require_util = __commonJS({
     }
     __name(bodyLength, "bodyLength");
     function isDestroyed(body2) {
-      return body2 && !!(body2.destroyed || body2[kDestroyed] || stream3.isDestroyed?.(body2));
+      return body2 && !!(body2.destroyed || body2[kDestroyed] || stream4.isDestroyed?.(body2));
     }
     __name(isDestroyed, "isDestroyed");
-    function destroy2(stream4, err) {
-      if (stream4 == null || !isStream(stream4) || isDestroyed(stream4)) {
+    function destroy2(stream5, err) {
+      if (stream5 == null || !isStream(stream5) || isDestroyed(stream5)) {
         return;
       }
-      if (typeof stream4.destroy === "function") {
-        if (Object.getPrototypeOf(stream4).constructor === IncomingMessage) {
-          stream4.socket = null;
+      if (typeof stream5.destroy === "function") {
+        if (Object.getPrototypeOf(stream5).constructor === IncomingMessage) {
+          stream5.socket = null;
         }
-        stream4.destroy(err);
+        stream5.destroy(err);
       } else if (err) {
         queueMicrotask(() => {
-          stream4.emit("error", err);
+          stream5.emit("error", err);
         });
       }
-      if (stream4.destroyed !== true) {
-        stream4[kDestroyed] = true;
+      if (stream5.destroyed !== true) {
+        stream5[kDestroyed] = true;
       }
     }
     __name(destroy2, "destroy");
@@ -1374,15 +1374,15 @@ var require_util = __commonJS({
     }
     __name(validateHandler, "validateHandler");
     function isDisturbed(body2) {
-      return !!(body2 && (stream3.isDisturbed(body2) || body2[kBodyUsed]));
+      return !!(body2 && (stream4.isDisturbed(body2) || body2[kBodyUsed]));
     }
     __name(isDisturbed, "isDisturbed");
     function isErrored(body2) {
-      return !!(body2 && stream3.isErrored(body2));
+      return !!(body2 && stream4.isErrored(body2));
     }
     __name(isErrored, "isErrored");
     function isReadable(body2) {
-      return !!(body2 && stream3.isReadable(body2));
+      return !!(body2 && stream4.isReadable(body2));
     }
     __name(isReadable, "isReadable");
     function getSocketInfo(socket) {
@@ -1604,10 +1604,10 @@ var require_diagnostics = __commonJS({
   "node_modules/undici/lib/core/diagnostics.js"(exports2, module2) {
     "use strict";
     var diagnosticsChannel = require("node:diagnostics_channel");
-    var util6 = require("node:util");
-    var undiciDebugLog = util6.debuglog("undici");
-    var fetchDebuglog = util6.debuglog("fetch");
-    var websocketDebuglog = util6.debuglog("websocket");
+    var util7 = require("node:util");
+    var undiciDebugLog = util7.debuglog("undici");
+    var fetchDebuglog = util7.debuglog("fetch");
+    var websocketDebuglog = util7.debuglog("websocket");
     var isClientSet = false;
     var channels = {
       // Client
@@ -1667,39 +1667,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path21, origin }
+          request: { method, path: path22, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path21);
+        debuglog("sending request to %s %s/%s", method, origin, path22);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path21, origin },
+          request: { method, path: path22, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path21,
+          path22,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path21, origin }
+          request: { method, path: path22, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path21);
+        debuglog("trailers received from %s %s/%s", method, origin, path22);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path21, origin },
+          request: { method, path: path22, origin },
           error: error2
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path21,
+          path22,
           error2.message
         );
       });
@@ -1748,9 +1748,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path21, origin }
+            request: { method, path: path22, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path21);
+          debuglog("sending request to %s %s/%s", method, origin, path22);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -1816,7 +1816,7 @@ var require_request = __commonJS({
         __name(this, "Request");
       }
       constructor(origin, {
-        path: path21,
+        path: path22,
         method,
         body: body2,
         headers,
@@ -1831,11 +1831,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path21 !== "string") {
+        if (typeof path22 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path21[0] !== "/" && !(path21.startsWith("http://") || path21.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path22[0] !== "/" && !(path22.startsWith("http://") || path22.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path21)) {
+        } else if (invalidPathRegex.test(path22)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -1901,7 +1901,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path21, query) : path21;
+        this.path = query ? buildURL(path22, query) : path22;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -2229,9 +2229,9 @@ var require_dispatcher_base = __commonJS({
       }
       close(callback) {
         if (callback === void 0) {
-          return new Promise((resolve3, reject) => {
+          return new Promise((resolve4, reject) => {
             this.close((err, data) => {
-              return err ? reject(err) : resolve3(data);
+              return err ? reject(err) : resolve4(data);
             });
           });
         }
@@ -2269,12 +2269,12 @@ var require_dispatcher_base = __commonJS({
           err = null;
         }
         if (callback === void 0) {
-          return new Promise((resolve3, reject) => {
+          return new Promise((resolve4, reject) => {
             this.destroy(err, (err2, data) => {
               return err2 ? (
                 /* istanbul ignore next: should never error */
                 reject(err2)
-              ) : resolve3(data);
+              ) : resolve4(data);
             });
           });
         }
@@ -2588,7 +2588,7 @@ var require_connect = __commonJS({
     "use strict";
     var net = require("node:net");
     var assert7 = require("node:assert");
-    var util6 = require_util();
+    var util7 = require_util();
     var { InvalidArgumentError, ConnectTimeoutError } = require_errors();
     var timers = require_timers();
     function noop() {
@@ -2664,7 +2664,7 @@ var require_connect = __commonJS({
           if (!tls) {
             tls = require("node:tls");
           }
-          servername = servername || options.servername || util6.getServerName(host) || null;
+          servername = servername || options.servername || util7.getServerName(host) || null;
           const sessionKey = servername || hostname;
           assert7(sessionKey);
           const session = customSession || sessionCache.get(sessionKey) || null;
@@ -2764,7 +2764,7 @@ var require_connect = __commonJS({
         message += ` (attempted address: ${opts.hostname}:${opts.port},`;
       }
       message += ` timeout: ${opts.timeout}ms)`;
-      util6.destroy(socket, new ConnectTimeoutError(message));
+      util7.destroy(socket, new ConnectTimeoutError(message));
     }
     __name(onConnectTimeout, "onConnectTimeout");
     module2.exports = buildConnector;
@@ -4609,8 +4609,8 @@ var require_util2 = __commonJS({
     function createDeferredPromise() {
       let res;
       let rej;
-      const promise = new Promise((resolve3, reject) => {
-        res = resolve3;
+      const promise = new Promise((resolve4, reject) => {
+        res = resolve4;
         rej = reject;
       });
       return { promise, resolve: res, reject: rej };
@@ -4786,8 +4786,8 @@ var require_util2 = __commonJS({
       }
     }
     __name(fullyReadBody, "fullyReadBody");
-    function isReadableStreamLike(stream3) {
-      return stream3 instanceof ReadableStream || stream3[Symbol.toStringTag] === "ReadableStream" && typeof stream3.tee === "function";
+    function isReadableStreamLike(stream4) {
+      return stream4 instanceof ReadableStream || stream4[Symbol.toStringTag] === "ReadableStream" && typeof stream4.tee === "function";
     }
     __name(isReadableStreamLike, "isReadableStreamLike");
     function readableStreamClose(controller) {
@@ -5608,7 +5608,7 @@ var require_formdata_parser = __commonJS({
 var require_body = __commonJS({
   "node_modules/undici/lib/web/fetch/body.js"(exports2, module2) {
     "use strict";
-    var util6 = require_util();
+    var util7 = require_util();
     var {
       ReadableStreamFrom,
       isBlobLike,
@@ -5643,20 +5643,20 @@ var require_body = __commonJS({
     var streamRegistry;
     if (hasFinalizationRegistry) {
       streamRegistry = new FinalizationRegistry((weakRef) => {
-        const stream3 = weakRef.deref();
-        if (stream3 && !stream3.locked && !isDisturbed(stream3) && !isErrored(stream3)) {
-          stream3.cancel("Response object has been garbage collected").catch(noop);
+        const stream4 = weakRef.deref();
+        if (stream4 && !stream4.locked && !isDisturbed(stream4) && !isErrored(stream4)) {
+          stream4.cancel("Response object has been garbage collected").catch(noop);
         }
       });
     }
     function extractBody(object, keepalive = false) {
-      let stream3 = null;
+      let stream4 = null;
       if (object instanceof ReadableStream) {
-        stream3 = object;
+        stream4 = object;
       } else if (isBlobLike(object)) {
-        stream3 = object.stream();
+        stream4 = object.stream();
       } else {
-        stream3 = new ReadableStream({
+        stream4 = new ReadableStream({
           async pull(controller) {
             const buffer3 = typeof source === "string" ? textEncoder.encode(source) : source;
             if (buffer3.byteLength) {
@@ -5669,7 +5669,7 @@ var require_body = __commonJS({
           type: "bytes"
         });
       }
-      assert7(isReadableStreamLike(stream3));
+      assert7(isReadableStreamLike(stream4));
       let action5 = null;
       let source = null;
       let length = null;
@@ -5684,7 +5684,7 @@ var require_body = __commonJS({
         source = new Uint8Array(object.slice());
       } else if (ArrayBuffer.isView(object)) {
         source = new Uint8Array(object.buffer.slice(object.byteOffset, object.byteOffset + object.byteLength));
-      } else if (util6.isFormDataLike(object)) {
+      } else if (util7.isFormDataLike(object)) {
         const boundary = `----formdata-undici-0${`${random(1e11)}`.padStart(11, "0")}`;
         const prefix2 = `--${boundary}\r
 Content-Disposition: form-data`;
@@ -5743,19 +5743,19 @@ Content-Type: ${value.type || "application/octet-stream"}\r
         if (keepalive) {
           throw new TypeError("keepalive");
         }
-        if (util6.isDisturbed(object) || object.locked) {
+        if (util7.isDisturbed(object) || object.locked) {
           throw new TypeError(
             "Response body object should not be disturbed or locked"
           );
         }
-        stream3 = object instanceof ReadableStream ? object : ReadableStreamFrom(object);
+        stream4 = object instanceof ReadableStream ? object : ReadableStreamFrom(object);
       }
-      if (typeof source === "string" || util6.isBuffer(source)) {
+      if (typeof source === "string" || util7.isBuffer(source)) {
         length = Buffer.byteLength(source);
       }
       if (action5 != null) {
         let iterator;
-        stream3 = new ReadableStream({
+        stream4 = new ReadableStream({
           async start() {
             iterator = action5(object)[Symbol.asyncIterator]();
           },
@@ -5767,7 +5767,7 @@ Content-Type: ${value.type || "application/octet-stream"}\r
                 controller.byobRequest?.respond(0);
               });
             } else {
-              if (!isErrored(stream3)) {
+              if (!isErrored(stream4)) {
                 const buffer3 = new Uint8Array(value);
                 if (buffer3.byteLength) {
                   controller.enqueue(buffer3);
@@ -5782,13 +5782,13 @@ Content-Type: ${value.type || "application/octet-stream"}\r
           type: "bytes"
         });
       }
-      const body2 = { stream: stream3, source, length };
+      const body2 = { stream: stream4, source, length };
       return [body2, type];
     }
     __name(extractBody, "extractBody");
     function safelyExtractBody(object, keepalive = false) {
       if (object instanceof ReadableStream) {
-        assert7(!util6.isDisturbed(object), "The body has already been consumed.");
+        assert7(!util7.isDisturbed(object), "The body has already been consumed.");
         assert7(!object.locked, "The stream is locked.");
       }
       return extractBody(object, keepalive);
@@ -5901,7 +5901,7 @@ Content-Type: ${value.type || "application/octet-stream"}\r
     __name(consumeBody, "consumeBody");
     function bodyUnusable(object) {
       const body2 = object[kState].body;
-      return body2 != null && (body2.stream.locked || util6.isDisturbed(body2.stream));
+      return body2 != null && (body2.stream.locked || util7.isDisturbed(body2.stream));
     }
     __name(bodyUnusable, "bodyUnusable");
     function parseJSONFromBytes(bytes) {
@@ -5934,7 +5934,7 @@ var require_client_h1 = __commonJS({
   "node_modules/undici/lib/dispatcher/client-h1.js"(exports2, module2) {
     "use strict";
     var assert7 = require("node:assert");
-    var util6 = require_util();
+    var util7 = require_util();
     var { channels } = require_diagnostics();
     var timers = require_timers();
     var {
@@ -5985,8 +5985,8 @@ var require_client_h1 = __commonJS({
     var constants4 = require_constants2();
     var EMPTY_BUF = Buffer.alloc(0);
     var FastBuffer = Buffer[Symbol.species];
-    var addListener = util6.addListener;
-    var removeAllListeners = util6.removeAllListeners;
+    var addListener = util7.addListener;
+    var removeAllListeners = util7.removeAllListeners;
     var extractBody;
     async function lazyllhttp() {
       const llhttpWasmData = process.env.JEST_WORKER_ID ? require_llhttp_wasm() : void 0;
@@ -6168,7 +6168,7 @@ var require_client_h1 = __commonJS({
             throw new HTTPParserError(message, constants4.ERROR[ret], data.slice(offset));
           }
         } catch (err) {
-          util6.destroy(socket, err);
+          util7.destroy(socket, err);
         }
       }
       destroy() {
@@ -6215,13 +6215,13 @@ var require_client_h1 = __commonJS({
         }
         const key = this.headers[len - 2];
         if (key.length === 10) {
-          const headerName = util6.bufferToLowerCasedHeaderName(key);
+          const headerName = util7.bufferToLowerCasedHeaderName(key);
           if (headerName === "keep-alive") {
             this.keepAlive += buf.toString();
           } else if (headerName === "connection") {
             this.connection += buf.toString();
           }
-        } else if (key.length === 14 && util6.bufferToLowerCasedHeaderName(key) === "content-length") {
+        } else if (key.length === 14 && util7.bufferToLowerCasedHeaderName(key) === "content-length") {
           this.contentLength += buf.toString();
         }
         this.trackHeader(buf.length);
@@ -6229,7 +6229,7 @@ var require_client_h1 = __commonJS({
       trackHeader(len) {
         this.headersSize += len;
         if (this.headersSize >= this.headersMaxSize) {
-          util6.destroy(this.socket, new HeadersOverflowError());
+          util7.destroy(this.socket, new HeadersOverflowError());
         }
       }
       onUpgrade(head) {
@@ -6260,7 +6260,7 @@ var require_client_h1 = __commonJS({
         try {
           request.onUpgrade(statusCode, headers, socket);
         } catch (err) {
-          util6.destroy(socket, err);
+          util7.destroy(socket, err);
         }
         client[kResume]();
       }
@@ -6276,11 +6276,11 @@ var require_client_h1 = __commonJS({
         assert7(!this.upgrade);
         assert7(this.statusCode < 200);
         if (statusCode === 100) {
-          util6.destroy(socket, new SocketError("bad response", util6.getSocketInfo(socket)));
+          util7.destroy(socket, new SocketError("bad response", util7.getSocketInfo(socket)));
           return -1;
         }
         if (upgrade && !request.upgrade) {
-          util6.destroy(socket, new SocketError("bad upgrade", util6.getSocketInfo(socket)));
+          util7.destroy(socket, new SocketError("bad upgrade", util7.getSocketInfo(socket)));
           return -1;
         }
         assert7(this.timeoutType === TIMEOUT_HEADERS);
@@ -6309,7 +6309,7 @@ var require_client_h1 = __commonJS({
         this.headers = [];
         this.headersSize = 0;
         if (this.shouldKeepAlive && client[kPipelining]) {
-          const keepAliveTimeout = this.keepAlive ? util6.parseKeepAliveTimeout(this.keepAlive) : null;
+          const keepAliveTimeout = this.keepAlive ? util7.parseKeepAliveTimeout(this.keepAlive) : null;
           if (keepAliveTimeout != null) {
             const timeout = Math.min(
               keepAliveTimeout - client[kKeepAliveTimeoutThreshold],
@@ -6357,7 +6357,7 @@ var require_client_h1 = __commonJS({
         }
         assert7(statusCode >= 200);
         if (maxResponseSize > -1 && this.bytesRead + buf.length > maxResponseSize) {
-          util6.destroy(socket, new ResponseExceededMaxSizeError());
+          util7.destroy(socket, new ResponseExceededMaxSizeError());
           return -1;
         }
         this.bytesRead += buf.length;
@@ -6389,20 +6389,20 @@ var require_client_h1 = __commonJS({
           return;
         }
         if (request.method !== "HEAD" && contentLength2 && bytesRead !== parseInt(contentLength2, 10)) {
-          util6.destroy(socket, new ResponseContentLengthMismatchError());
+          util7.destroy(socket, new ResponseContentLengthMismatchError());
           return -1;
         }
         request.onComplete(headers);
         client[kQueue][client[kRunningIdx]++] = null;
         if (socket[kWriting]) {
           assert7(client[kRunning] === 0);
-          util6.destroy(socket, new InformationalError("reset"));
+          util7.destroy(socket, new InformationalError("reset"));
           return constants4.ERROR.PAUSED;
         } else if (!shouldKeepAlive) {
-          util6.destroy(socket, new InformationalError("reset"));
+          util7.destroy(socket, new InformationalError("reset"));
           return constants4.ERROR.PAUSED;
         } else if (socket[kReset] && client[kRunning] === 0) {
-          util6.destroy(socket, new InformationalError("reset"));
+          util7.destroy(socket, new InformationalError("reset"));
           return constants4.ERROR.PAUSED;
         } else if (client[kPipelining] == null || client[kPipelining] === 1) {
           setImmediate(() => client[kResume]());
@@ -6416,15 +6416,15 @@ var require_client_h1 = __commonJS({
       if (timeoutType === TIMEOUT_HEADERS) {
         if (!socket[kWriting] || socket.writableNeedDrain || client[kRunning] > 1) {
           assert7(!paused, "cannot be paused while waiting for headers");
-          util6.destroy(socket, new HeadersTimeoutError());
+          util7.destroy(socket, new HeadersTimeoutError());
         }
       } else if (timeoutType === TIMEOUT_BODY) {
         if (!paused) {
-          util6.destroy(socket, new BodyTimeoutError());
+          util7.destroy(socket, new BodyTimeoutError());
         }
       } else if (timeoutType === TIMEOUT_KEEP_ALIVE) {
         assert7(client[kRunning] === 0 && client[kKeepAliveTimeoutValue]);
-        util6.destroy(socket, new InformationalError("socket idle timeout"));
+        util7.destroy(socket, new InformationalError("socket idle timeout"));
       }
     }
     __name(onParserTimeout, "onParserTimeout");
@@ -6461,7 +6461,7 @@ var require_client_h1 = __commonJS({
           parser.onMessageComplete();
           return;
         }
-        util6.destroy(this, new SocketError("other side closed", util6.getSocketInfo(this)));
+        util7.destroy(this, new SocketError("other side closed", util7.getSocketInfo(this)));
       });
       addListener(socket, "close", function() {
         const client2 = this[kClient];
@@ -6473,7 +6473,7 @@ var require_client_h1 = __commonJS({
           this[kParser].destroy();
           this[kParser] = null;
         }
-        const err = this[kError] || new SocketError("closed", util6.getSocketInfo(this));
+        const err = this[kError] || new SocketError("closed", util7.getSocketInfo(this));
         client2[kSocket] = null;
         client2[kHTTPContext] = null;
         if (client2.destroyed) {
@@ -6481,12 +6481,12 @@ var require_client_h1 = __commonJS({
           const requests = client2[kQueue].splice(client2[kRunningIdx]);
           for (let i = 0; i < requests.length; i++) {
             const request = requests[i];
-            util6.errorRequest(client2, request, err);
+            util7.errorRequest(client2, request, err);
           }
         } else if (client2[kRunning] > 0 && err.code !== "UND_ERR_INFO") {
           const request = client2[kQueue][client2[kRunningIdx]];
           client2[kQueue][client2[kRunningIdx]++] = null;
-          util6.errorRequest(client2, request, err);
+          util7.errorRequest(client2, request, err);
         }
         client2[kPendingIdx] = client2[kRunningIdx];
         assert7(client2[kRunning] === 0);
@@ -6527,7 +6527,7 @@ var require_client_h1 = __commonJS({
             if (client[kRunning] > 0 && (request.upgrade || request.method === "CONNECT")) {
               return true;
             }
-            if (client[kRunning] > 0 && util6.bodyLength(request.body) !== 0 && (util6.isStream(request.body) || util6.isAsyncIterable(request.body) || util6.isFormDataLike(request.body))) {
+            if (client[kRunning] > 0 && util7.bodyLength(request.body) !== 0 && (util7.isStream(request.body) || util7.isAsyncIterable(request.body) || util7.isFormDataLike(request.body))) {
               return true;
             }
           }
@@ -6567,10 +6567,10 @@ var require_client_h1 = __commonJS({
     }
     __name(shouldSendContentLength, "shouldSendContentLength");
     function writeH1(client, request) {
-      const { method, path: path21, host, upgrade, blocking, reset } = request;
+      const { method, path: path22, host, upgrade, blocking, reset } = request;
       let { body: body2, headers, contentLength: contentLength2 } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
-      if (util6.isFormDataLike(body2)) {
+      if (util7.isFormDataLike(body2)) {
         if (!extractBody) {
           extractBody = require_body().extractBody;
         }
@@ -6580,13 +6580,13 @@ var require_client_h1 = __commonJS({
         }
         body2 = bodyStream.stream;
         contentLength2 = bodyStream.length;
-      } else if (util6.isBlobLike(body2) && request.contentType == null && body2.type) {
+      } else if (util7.isBlobLike(body2) && request.contentType == null && body2.type) {
         headers.push("content-type", body2.type);
       }
       if (body2 && typeof body2.read === "function") {
         body2.read(0);
       }
-      const bodyLength = util6.bodyLength(body2);
+      const bodyLength = util7.bodyLength(body2);
       contentLength2 = bodyLength ?? contentLength2;
       if (contentLength2 === null) {
         contentLength2 = request.contentLength;
@@ -6596,7 +6596,7 @@ var require_client_h1 = __commonJS({
       }
       if (shouldSendContentLength(method) && contentLength2 > 0 && request.contentLength !== null && request.contentLength !== contentLength2) {
         if (client[kStrictContentLength]) {
-          util6.errorRequest(client, request, new RequestContentLengthMismatchError());
+          util7.errorRequest(client, request, new RequestContentLengthMismatchError());
           return false;
         }
         process.emitWarning(new RequestContentLengthMismatchError());
@@ -6606,14 +6606,14 @@ var require_client_h1 = __commonJS({
         if (request.aborted || request.completed) {
           return;
         }
-        util6.errorRequest(client, request, err || new RequestAbortedError());
-        util6.destroy(body2);
-        util6.destroy(socket, new InformationalError("aborted"));
+        util7.errorRequest(client, request, err || new RequestAbortedError());
+        util7.destroy(body2);
+        util7.destroy(socket, new InformationalError("aborted"));
       }, "abort");
       try {
         request.onConnect(abort);
       } catch (err) {
-        util6.errorRequest(client, request, err);
+        util7.errorRequest(client, request, err);
       }
       if (request.aborted) {
         return false;
@@ -6633,7 +6633,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path21} HTTP/1.1\r
+      let header = `${method} ${path22} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -6670,17 +6670,17 @@ upgrade: ${upgrade}\r
       }
       if (!body2 || bodyLength === 0) {
         writeBuffer(abort, null, client, request, socket, contentLength2, header, expectsPayload);
-      } else if (util6.isBuffer(body2)) {
+      } else if (util7.isBuffer(body2)) {
         writeBuffer(abort, body2, client, request, socket, contentLength2, header, expectsPayload);
-      } else if (util6.isBlobLike(body2)) {
+      } else if (util7.isBlobLike(body2)) {
         if (typeof body2.stream === "function") {
           writeIterable(abort, body2.stream(), client, request, socket, contentLength2, header, expectsPayload);
         } else {
           writeBlob(abort, body2, client, request, socket, contentLength2, header, expectsPayload);
         }
-      } else if (util6.isStream(body2)) {
+      } else if (util7.isStream(body2)) {
         writeStream(abort, body2, client, request, socket, contentLength2, header, expectsPayload);
-      } else if (util6.isIterable(body2)) {
+      } else if (util7.isIterable(body2)) {
         writeIterable(abort, body2, client, request, socket, contentLength2, header, expectsPayload);
       } else {
         assert7(false);
@@ -6701,7 +6701,7 @@ upgrade: ${upgrade}\r
             this.pause();
           }
         } catch (err) {
-          util6.destroy(this, err);
+          util7.destroy(this, err);
         }
       }, "onData");
       const onDrain = /* @__PURE__ */ __name(function() {
@@ -6738,9 +6738,9 @@ upgrade: ${upgrade}\r
         }
         writer.destroy(err);
         if (err && (err.code !== "UND_ERR_INFO" || err.message !== "reset")) {
-          util6.destroy(body2, err);
+          util7.destroy(body2, err);
         } else {
-          util6.destroy(body2);
+          util7.destroy(body2);
         }
       }, "onFinished");
       body2.on("data", onData).on("end", onFinished).on("error", onFinished).on("close", onClose);
@@ -6770,7 +6770,7 @@ upgrade: ${upgrade}\r
             socket.write(`${header}\r
 `, "latin1");
           }
-        } else if (util6.isBuffer(body2)) {
+        } else if (util7.isBuffer(body2)) {
           assert7(contentLength2 === body2.byteLength, "buffer body must have content length");
           socket.cork();
           socket.write(`${header}content-length: ${contentLength2}\r
@@ -6825,12 +6825,12 @@ upgrade: ${upgrade}\r
         }
       }
       __name(onDrain, "onDrain");
-      const waitForDrain = /* @__PURE__ */ __name(() => new Promise((resolve3, reject) => {
+      const waitForDrain = /* @__PURE__ */ __name(() => new Promise((resolve4, reject) => {
         assert7(callback === null);
         if (socket[kError]) {
           reject(socket[kError]);
         } else {
-          callback = resolve3;
+          callback = resolve4;
         }
       }), "waitForDrain");
       socket.on("close", onDrain).on("drain", onDrain);
@@ -6971,8 +6971,8 @@ var require_client_h2 = __commonJS({
   "node_modules/undici/lib/dispatcher/client-h2.js"(exports2, module2) {
     "use strict";
     var assert7 = require("node:assert");
-    var { pipeline: pipeline3 } = require("node:stream");
-    var util6 = require_util();
+    var { pipeline: pipeline4 } = require("node:stream");
+    var util7 = require_util();
     var {
       RequestContentLengthMismatchError,
       RequestAbortedError,
@@ -7047,37 +7047,37 @@ var require_client_h2 = __commonJS({
       session[kOpenStreams] = 0;
       session[kClient] = client;
       session[kSocket] = socket;
-      util6.addListener(session, "error", onHttp2SessionError);
-      util6.addListener(session, "frameError", onHttp2FrameError);
-      util6.addListener(session, "end", onHttp2SessionEnd);
-      util6.addListener(session, "goaway", onHTTP2GoAway);
-      util6.addListener(session, "close", function() {
+      util7.addListener(session, "error", onHttp2SessionError);
+      util7.addListener(session, "frameError", onHttp2FrameError);
+      util7.addListener(session, "end", onHttp2SessionEnd);
+      util7.addListener(session, "goaway", onHTTP2GoAway);
+      util7.addListener(session, "close", function() {
         const { [kClient]: client2 } = this;
         const { [kSocket]: socket2 } = client2;
-        const err = this[kSocket][kError] || this[kError] || new SocketError("closed", util6.getSocketInfo(socket2));
+        const err = this[kSocket][kError] || this[kError] || new SocketError("closed", util7.getSocketInfo(socket2));
         client2[kHTTP2Session] = null;
         if (client2.destroyed) {
           assert7(client2[kPending] === 0);
           const requests = client2[kQueue].splice(client2[kRunningIdx]);
           for (let i = 0; i < requests.length; i++) {
             const request = requests[i];
-            util6.errorRequest(client2, request, err);
+            util7.errorRequest(client2, request, err);
           }
         }
       });
       session.unref();
       client[kHTTP2Session] = session;
       socket[kHTTP2Session] = session;
-      util6.addListener(socket, "error", function(err) {
+      util7.addListener(socket, "error", function(err) {
         assert7(err.code !== "ERR_TLS_CERT_ALTNAME_INVALID");
         this[kError] = err;
         this[kClient][kOnError](err);
       });
-      util6.addListener(socket, "end", function() {
-        util6.destroy(this, new SocketError("other side closed", util6.getSocketInfo(this)));
+      util7.addListener(socket, "end", function() {
+        util7.destroy(this, new SocketError("other side closed", util7.getSocketInfo(this)));
       });
-      util6.addListener(socket, "close", function() {
-        const err = this[kError] || new SocketError("closed", util6.getSocketInfo(this));
+      util7.addListener(socket, "close", function() {
+        const err = this[kError] || new SocketError("closed", util7.getSocketInfo(this));
         client[kSocket] = null;
         if (this[kHTTP2Session] != null) {
           this[kHTTP2Session].destroy(err);
@@ -7144,13 +7144,13 @@ var require_client_h2 = __commonJS({
     }
     __name(onHttp2FrameError, "onHttp2FrameError");
     function onHttp2SessionEnd() {
-      const err = new SocketError("other side closed", util6.getSocketInfo(this[kSocket]));
+      const err = new SocketError("other side closed", util7.getSocketInfo(this[kSocket]));
       this.destroy(err);
-      util6.destroy(this[kSocket], err);
+      util7.destroy(this[kSocket], err);
     }
     __name(onHttp2SessionEnd, "onHttp2SessionEnd");
     function onHTTP2GoAway(code) {
-      const err = this[kError] || new SocketError(`HTTP/2: "GOAWAY" frame received with code ${code}`, util6.getSocketInfo(this));
+      const err = this[kError] || new SocketError(`HTTP/2: "GOAWAY" frame received with code ${code}`, util7.getSocketInfo(this));
       const client = this[kClient];
       client[kSocket] = null;
       client[kHTTPContext] = null;
@@ -7158,11 +7158,11 @@ var require_client_h2 = __commonJS({
         this[kHTTP2Session].destroy(err);
         this[kHTTP2Session] = null;
       }
-      util6.destroy(this[kSocket], err);
+      util7.destroy(this[kSocket], err);
       if (client[kRunningIdx] < client[kQueue].length) {
         const request = client[kQueue][client[kRunningIdx]];
         client[kQueue][client[kRunningIdx]++] = null;
-        util6.errorRequest(client, request, err);
+        util7.errorRequest(client, request, err);
         client[kPendingIdx] = client[kRunningIdx];
       }
       assert7(client[kRunning] === 0);
@@ -7176,10 +7176,10 @@ var require_client_h2 = __commonJS({
     __name(shouldSendContentLength, "shouldSendContentLength");
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path21, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { method, path: path22, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body: body2 } = request;
       if (upgrade) {
-        util6.errorRequest(client, request, new Error("Upgrade not supported for H2"));
+        util7.errorRequest(client, request, new Error("Upgrade not supported for H2"));
         return false;
       }
       const headers = {};
@@ -7198,7 +7198,7 @@ var require_client_h2 = __commonJS({
           headers[key] = val;
         }
       }
-      let stream3;
+      let stream4;
       const { hostname, port } = client[kUrl];
       headers[HTTP2_HEADER_AUTHORITY] = host || `${hostname}${port ? `:${port}` : ""}`;
       headers[HTTP2_HEADER_METHOD] = method;
@@ -7207,50 +7207,50 @@ var require_client_h2 = __commonJS({
           return;
         }
         err = err || new RequestAbortedError();
-        util6.errorRequest(client, request, err);
-        if (stream3 != null) {
-          util6.destroy(stream3, err);
+        util7.errorRequest(client, request, err);
+        if (stream4 != null) {
+          util7.destroy(stream4, err);
         }
-        util6.destroy(body2, err);
+        util7.destroy(body2, err);
         client[kQueue][client[kRunningIdx]++] = null;
         client[kResume]();
       }, "abort");
       try {
         request.onConnect(abort);
       } catch (err) {
-        util6.errorRequest(client, request, err);
+        util7.errorRequest(client, request, err);
       }
       if (request.aborted) {
         return false;
       }
       if (method === "CONNECT") {
         session.ref();
-        stream3 = session.request(headers, { endStream: false, signal });
-        if (stream3.id && !stream3.pending) {
-          request.onUpgrade(null, null, stream3);
+        stream4 = session.request(headers, { endStream: false, signal });
+        if (stream4.id && !stream4.pending) {
+          request.onUpgrade(null, null, stream4);
           ++session[kOpenStreams];
           client[kQueue][client[kRunningIdx]++] = null;
         } else {
-          stream3.once("ready", () => {
-            request.onUpgrade(null, null, stream3);
+          stream4.once("ready", () => {
+            request.onUpgrade(null, null, stream4);
             ++session[kOpenStreams];
             client[kQueue][client[kRunningIdx]++] = null;
           });
         }
-        stream3.once("close", () => {
+        stream4.once("close", () => {
           session[kOpenStreams] -= 1;
           if (session[kOpenStreams] === 0) session.unref();
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path21;
+      headers[HTTP2_HEADER_PATH] = path22;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body2 && typeof body2.read === "function") {
         body2.read(0);
       }
-      let contentLength2 = util6.bodyLength(body2);
-      if (util6.isFormDataLike(body2)) {
+      let contentLength2 = util7.bodyLength(body2);
+      if (util7.isFormDataLike(body2)) {
         extractBody ??= require_body().extractBody;
         const [bodyStream, contentType2] = extractBody(body2);
         headers["content-type"] = contentType2;
@@ -7265,7 +7265,7 @@ var require_client_h2 = __commonJS({
       }
       if (shouldSendContentLength(method) && contentLength2 > 0 && request.contentLength != null && request.contentLength !== contentLength2) {
         if (client[kStrictContentLength]) {
-          util6.errorRequest(client, request, new RequestContentLengthMismatchError());
+          util7.errorRequest(client, request, new RequestContentLengthMismatchError());
           return false;
         }
         process.emitWarning(new RequestContentLengthMismatchError());
@@ -7278,36 +7278,36 @@ var require_client_h2 = __commonJS({
       const shouldEndStream = method === "GET" || method === "HEAD" || body2 === null;
       if (expectContinue) {
         headers[HTTP2_HEADER_EXPECT] = "100-continue";
-        stream3 = session.request(headers, { endStream: shouldEndStream, signal });
-        stream3.once("continue", writeBodyH2);
+        stream4 = session.request(headers, { endStream: shouldEndStream, signal });
+        stream4.once("continue", writeBodyH2);
       } else {
-        stream3 = session.request(headers, {
+        stream4 = session.request(headers, {
           endStream: shouldEndStream,
           signal
         });
         writeBodyH2();
       }
       ++session[kOpenStreams];
-      stream3.once("response", (headers2) => {
+      stream4.once("response", (headers2) => {
         const { [HTTP2_HEADER_STATUS]: statusCode, ...realHeaders } = headers2;
         request.onResponseStarted();
         if (request.aborted) {
           const err = new RequestAbortedError();
-          util6.errorRequest(client, request, err);
-          util6.destroy(stream3, err);
+          util7.errorRequest(client, request, err);
+          util7.destroy(stream4, err);
           return;
         }
-        if (request.onHeaders(Number(statusCode), parseH2Headers(realHeaders), stream3.resume.bind(stream3), "") === false) {
-          stream3.pause();
+        if (request.onHeaders(Number(statusCode), parseH2Headers(realHeaders), stream4.resume.bind(stream4), "") === false) {
+          stream4.pause();
         }
-        stream3.on("data", (chunk) => {
+        stream4.on("data", (chunk) => {
           if (request.onData(chunk) === false) {
-            stream3.pause();
+            stream4.pause();
           }
         });
       });
-      stream3.once("end", () => {
-        if (stream3.state?.state == null || stream3.state.state < 6) {
+      stream4.once("end", () => {
+        if (stream4.state?.state == null || stream4.state.state < 6) {
           request.onComplete([]);
         }
         if (session[kOpenStreams] === 0) {
@@ -7318,16 +7318,16 @@ var require_client_h2 = __commonJS({
         client[kPendingIdx] = client[kRunningIdx];
         client[kResume]();
       });
-      stream3.once("close", () => {
+      stream4.once("close", () => {
         session[kOpenStreams] -= 1;
         if (session[kOpenStreams] === 0) {
           session.unref();
         }
       });
-      stream3.once("error", function(err) {
+      stream4.once("error", function(err) {
         abort(err);
       });
-      stream3.once("frameError", (type, code) => {
+      stream4.once("frameError", (type, code) => {
         abort(new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code}`));
       });
       return true;
@@ -7335,7 +7335,7 @@ var require_client_h2 = __commonJS({
         if (!body2 || contentLength2 === 0) {
           writeBuffer(
             abort,
-            stream3,
+            stream4,
             null,
             client,
             request,
@@ -7343,10 +7343,10 @@ var require_client_h2 = __commonJS({
             contentLength2,
             expectsPayload
           );
-        } else if (util6.isBuffer(body2)) {
+        } else if (util7.isBuffer(body2)) {
           writeBuffer(
             abort,
-            stream3,
+            stream4,
             body2,
             client,
             request,
@@ -7354,11 +7354,11 @@ var require_client_h2 = __commonJS({
             contentLength2,
             expectsPayload
           );
-        } else if (util6.isBlobLike(body2)) {
+        } else if (util7.isBlobLike(body2)) {
           if (typeof body2.stream === "function") {
             writeIterable(
               abort,
-              stream3,
+              stream4,
               body2.stream(),
               client,
               request,
@@ -7369,7 +7369,7 @@ var require_client_h2 = __commonJS({
           } else {
             writeBlob(
               abort,
-              stream3,
+              stream4,
               body2,
               client,
               request,
@@ -7378,21 +7378,21 @@ var require_client_h2 = __commonJS({
               expectsPayload
             );
           }
-        } else if (util6.isStream(body2)) {
+        } else if (util7.isStream(body2)) {
           writeStream(
             abort,
             client[kSocket],
             expectsPayload,
-            stream3,
+            stream4,
             body2,
             client,
             request,
             contentLength2
           );
-        } else if (util6.isIterable(body2)) {
+        } else if (util7.isIterable(body2)) {
           writeIterable(
             abort,
-            stream3,
+            stream4,
             body2,
             client,
             request,
@@ -7409,7 +7409,7 @@ var require_client_h2 = __commonJS({
     __name(writeH2, "writeH2");
     function writeBuffer(abort, h2stream, body2, client, request, socket, contentLength2, expectsPayload) {
       try {
-        if (body2 != null && util6.isBuffer(body2)) {
+        if (body2 != null && util7.isBuffer(body2)) {
           assert7(contentLength2 === body2.byteLength, "buffer body must have content length");
           h2stream.cork();
           h2stream.write(body2);
@@ -7429,15 +7429,15 @@ var require_client_h2 = __commonJS({
     __name(writeBuffer, "writeBuffer");
     function writeStream(abort, socket, expectsPayload, h2stream, body2, client, request, contentLength2) {
       assert7(contentLength2 !== 0 || client[kRunning] === 0, "stream body cannot be pipelined");
-      const pipe = pipeline3(
+      const pipe = pipeline4(
         body2,
         h2stream,
         (err) => {
           if (err) {
-            util6.destroy(pipe, err);
+            util7.destroy(pipe, err);
             abort(err);
           } else {
-            util6.removeAllListeners(pipe);
+            util7.removeAllListeners(pipe);
             request.onRequestSent();
             if (!expectsPayload) {
               socket[kReset] = true;
@@ -7446,7 +7446,7 @@ var require_client_h2 = __commonJS({
           }
         }
       );
-      util6.addListener(pipe, "data", onPipeData);
+      util7.addListener(pipe, "data", onPipeData);
       function onPipeData(chunk) {
         request.onBodySent(chunk);
       }
@@ -7486,12 +7486,12 @@ var require_client_h2 = __commonJS({
         }
       }
       __name(onDrain, "onDrain");
-      const waitForDrain = /* @__PURE__ */ __name(() => new Promise((resolve3, reject) => {
+      const waitForDrain = /* @__PURE__ */ __name(() => new Promise((resolve4, reject) => {
         assert7(callback === null);
         if (socket[kError]) {
           reject(socket[kError]);
         } else {
-          callback = resolve3;
+          callback = resolve4;
         }
       }), "waitForDrain");
       h2stream.on("close", onDrain).on("drain", onDrain);
@@ -7527,7 +7527,7 @@ var require_client_h2 = __commonJS({
 var require_redirect_handler = __commonJS({
   "node_modules/undici/lib/handler/redirect-handler.js"(exports2, module2) {
     "use strict";
-    var util6 = require_util();
+    var util7 = require_util();
     var { kBodyUsed } = require_symbols();
     var assert7 = require("node:assert");
     var { InvalidArgumentError } = require_errors();
@@ -7556,7 +7556,7 @@ var require_redirect_handler = __commonJS({
         if (maxRedirections != null && (!Number.isInteger(maxRedirections) || maxRedirections < 0)) {
           throw new InvalidArgumentError("maxRedirections must be a positive number");
         }
-        util6.validateHandler(handler, opts.method, opts.upgrade);
+        util7.validateHandler(handler, opts.method, opts.upgrade);
         this.dispatch = dispatch;
         this.location = null;
         this.abort = null;
@@ -7565,8 +7565,8 @@ var require_redirect_handler = __commonJS({
         this.handler = handler;
         this.history = [];
         this.redirectionLimitReached = false;
-        if (util6.isStream(this.opts.body)) {
-          if (util6.bodyLength(this.opts.body) === 0) {
+        if (util7.isStream(this.opts.body)) {
+          if (util7.bodyLength(this.opts.body) === 0) {
             this.opts.body.on("data", function() {
               assert7(false);
             });
@@ -7579,7 +7579,7 @@ var require_redirect_handler = __commonJS({
           }
         } else if (this.opts.body && typeof this.opts.body.pipeTo === "function") {
           this.opts.body = new BodyAsyncIterable(this.opts.body);
-        } else if (this.opts.body && typeof this.opts.body !== "string" && !ArrayBuffer.isView(this.opts.body) && util6.isIterable(this.opts.body)) {
+        } else if (this.opts.body && typeof this.opts.body !== "string" && !ArrayBuffer.isView(this.opts.body) && util7.isIterable(this.opts.body)) {
           this.opts.body = new BodyAsyncIterable(this.opts.body);
         }
       }
@@ -7594,7 +7594,7 @@ var require_redirect_handler = __commonJS({
         this.handler.onError(error2);
       }
       onHeaders(statusCode, headers, resume, statusText) {
-        this.location = this.history.length >= this.maxRedirections || util6.isDisturbed(this.opts.body) ? null : parseLocation(statusCode, headers);
+        this.location = this.history.length >= this.maxRedirections || util7.isDisturbed(this.opts.body) ? null : parseLocation(statusCode, headers);
         if (this.opts.throwOnMaxRedirect && this.history.length >= this.maxRedirections) {
           if (this.request) {
             this.request.abort(new Error("max redirects"));
@@ -7609,10 +7609,10 @@ var require_redirect_handler = __commonJS({
         if (!this.location) {
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
-        const { origin, pathname, search } = util6.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path21 = search ? `${pathname}${search}` : pathname;
+        const { origin, pathname, search } = util7.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
+        const path22 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path21;
+        this.opts.path = path22;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -7647,7 +7647,7 @@ var require_redirect_handler = __commonJS({
         return null;
       }
       for (let i = 0; i < headers.length; i += 2) {
-        if (headers[i].length === 8 && util6.headerNameToString(headers[i]) === "location") {
+        if (headers[i].length === 8 && util7.headerNameToString(headers[i]) === "location") {
           return headers[i + 1];
         }
       }
@@ -7655,13 +7655,13 @@ var require_redirect_handler = __commonJS({
     __name(parseLocation, "parseLocation");
     function shouldRemoveHeader(header, removeContent, unknownOrigin) {
       if (header.length === 4) {
-        return util6.headerNameToString(header) === "host";
+        return util7.headerNameToString(header) === "host";
       }
-      if (removeContent && util6.headerNameToString(header).startsWith("content-")) {
+      if (removeContent && util7.headerNameToString(header).startsWith("content-")) {
         return true;
       }
       if (unknownOrigin && (header.length === 13 || header.length === 6 || header.length === 19)) {
-        const name = util6.headerNameToString(header);
+        const name = util7.headerNameToString(header);
         return name === "authorization" || name === "cookie" || name === "proxy-authorization";
       }
       return false;
@@ -7721,7 +7721,7 @@ var require_client = __commonJS({
     var assert7 = require("node:assert");
     var net = require("node:net");
     var http3 = require("node:http");
-    var util6 = require_util();
+    var util7 = require_util();
     var { channels } = require_diagnostics();
     var Request = require_request();
     var DispatcherBase = require_dispatcher_base();
@@ -7908,7 +7908,7 @@ var require_client = __commonJS({
         } else {
           this[kInterceptors] = [createRedirectInterceptor({ maxRedirections })];
         }
-        this[kUrl] = util6.parseOrigin(url2);
+        this[kUrl] = util7.parseOrigin(url2);
         this[kConnector] = connect2;
         this[kPipelining] = pipelining != null ? pipelining : 1;
         this[kMaxHeadersSize] = maxHeaderSize || http3.maxHeaderSize;
@@ -7971,7 +7971,7 @@ var require_client = __commonJS({
         const request = new Request(origin, opts, handler);
         this[kQueue].push(request);
         if (this[kResuming]) {
-        } else if (util6.bodyLength(request.body) == null && util6.isIterable(request.body)) {
+        } else if (util7.bodyLength(request.body) == null && util7.isIterable(request.body)) {
           this[kResuming] = 1;
           queueMicrotask(() => resume(this));
         } else {
@@ -7983,27 +7983,27 @@ var require_client = __commonJS({
         return this[kNeedDrain] < 2;
       }
       async [kClose]() {
-        return new Promise((resolve3) => {
+        return new Promise((resolve4) => {
           if (this[kSize]) {
-            this[kClosedResolve] = resolve3;
+            this[kClosedResolve] = resolve4;
           } else {
-            resolve3(null);
+            resolve4(null);
           }
         });
       }
       async [kDestroy](err) {
-        return new Promise((resolve3) => {
+        return new Promise((resolve4) => {
           const requests = this[kQueue].splice(this[kPendingIdx]);
           for (let i = 0; i < requests.length; i++) {
             const request = requests[i];
-            util6.errorRequest(this, request, err);
+            util7.errorRequest(this, request, err);
           }
           const callback = /* @__PURE__ */ __name(() => {
             if (this[kClosedResolve]) {
               this[kClosedResolve]();
               this[kClosedResolve] = null;
             }
-            resolve3(null);
+            resolve4(null);
           }, "callback");
           if (this[kHTTPContext]) {
             this[kHTTPContext].destroy(err, callback);
@@ -8022,7 +8022,7 @@ var require_client = __commonJS({
         const requests = client[kQueue].splice(client[kRunningIdx]);
         for (let i = 0; i < requests.length; i++) {
           const request = requests[i];
-          util6.errorRequest(client, request, err);
+          util7.errorRequest(client, request, err);
         }
         assert7(client[kSize] === 0);
       }
@@ -8055,7 +8055,7 @@ var require_client = __commonJS({
         });
       }
       try {
-        const socket = await new Promise((resolve3, reject) => {
+        const socket = await new Promise((resolve4, reject) => {
           client[kConnector]({
             host,
             hostname,
@@ -8067,12 +8067,12 @@ var require_client = __commonJS({
             if (err) {
               reject(err);
             } else {
-              resolve3(socket2);
+              resolve4(socket2);
             }
           });
         });
         if (client.destroyed) {
-          util6.destroy(socket.on("error", noop), new ClientDestroyedError());
+          util7.destroy(socket.on("error", noop), new ClientDestroyedError());
           return;
         }
         assert7(socket);
@@ -8127,7 +8127,7 @@ var require_client = __commonJS({
           assert7(client[kRunning] === 0);
           while (client[kPending] > 0 && client[kQueue][client[kPendingIdx]].servername === client[kServerName]) {
             const request = client[kQueue][client[kPendingIdx]++];
-            util6.errorRequest(client, request, err);
+            util7.errorRequest(client, request, err);
           }
         } else {
           onError(client, err);
@@ -8419,8 +8419,8 @@ var require_pool_base = __commonJS({
         if (this[kQueue].isEmpty()) {
           await Promise.all(this[kClients].map((c) => c.close()));
         } else {
-          await new Promise((resolve3) => {
-            this[kClosedResolve] = resolve3;
+          await new Promise((resolve4) => {
+            this[kClosedResolve] = resolve4;
           });
         }
       }
@@ -8494,7 +8494,7 @@ var require_pool = __commonJS({
     var {
       InvalidArgumentError
     } = require_errors();
-    var util6 = require_util();
+    var util7 = require_util();
     var { kUrl, kInterceptors } = require_symbols();
     var buildConnector = require_connect();
     var kOptions = /* @__PURE__ */ Symbol("options");
@@ -8544,8 +8544,8 @@ var require_pool = __commonJS({
         }
         this[kInterceptors] = options.interceptors?.Pool && Array.isArray(options.interceptors.Pool) ? options.interceptors.Pool : [];
         this[kConnections] = connections || null;
-        this[kUrl] = util6.parseOrigin(origin);
-        this[kOptions] = { ...util6.deepClone(options), connect, allowH2 };
+        this[kUrl] = util7.parseOrigin(origin);
+        this[kOptions] = { ...util7.deepClone(options), connect, allowH2 };
         this[kOptions].interceptors = options.interceptors ? { ...options.interceptors } : void 0;
         this[kFactory] = factory;
         this.on("connectionError", (origin2, targets, error2) => {
@@ -8732,7 +8732,7 @@ var require_agent = __commonJS({
     var DispatcherBase = require_dispatcher_base();
     var Pool = require_pool();
     var Client = require_client();
-    var util6 = require_util();
+    var util7 = require_util();
     var createRedirectInterceptor = require_redirect_interceptor();
     var kOnConnect = /* @__PURE__ */ Symbol("onConnect");
     var kOnDisconnect = /* @__PURE__ */ Symbol("onDisconnect");
@@ -8764,7 +8764,7 @@ var require_agent = __commonJS({
           connect = { ...connect };
         }
         this[kInterceptors] = options.interceptors?.Agent && Array.isArray(options.interceptors.Agent) ? options.interceptors.Agent : [createRedirectInterceptor({ maxRedirections })];
-        this[kOptions] = { ...util6.deepClone(options), connect };
+        this[kOptions] = { ...util7.deepClone(options), connect };
         this[kOptions].interceptors = options.interceptors ? { ...options.interceptors } : void 0;
         this[kMaxRedirections] = maxRedirections;
         this[kFactory] = factory;
@@ -8890,10 +8890,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path21 = "/",
+          path: path22 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path21;
+        opts.path = origin + path22;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL3(origin);
           headers.host = host;
@@ -9545,7 +9545,7 @@ var require_readable = __commonJS({
     var assert7 = require("node:assert");
     var { Readable: Readable5 } = require("node:stream");
     var { RequestAbortedError, NotSupportedError, InvalidArgumentError, AbortError: AbortError5 } = require_errors();
-    var util6 = require_util();
+    var util7 = require_util();
     var { ReadableStreamFrom } = require_util();
     var kConsume = /* @__PURE__ */ Symbol("kConsume");
     var kReading = /* @__PURE__ */ Symbol("kReading");
@@ -9650,7 +9650,7 @@ var require_readable = __commonJS({
       }
       // https://fetch.spec.whatwg.org/#dom-body-bodyused
       get bodyUsed() {
-        return util6.isDisturbed(this);
+        return util7.isDisturbed(this);
       }
       // https://fetch.spec.whatwg.org/#dom-body-body
       get body() {
@@ -9673,7 +9673,7 @@ var require_readable = __commonJS({
         if (this._readableState.closeEmitted) {
           return null;
         }
-        return await new Promise((resolve3, reject) => {
+        return await new Promise((resolve4, reject) => {
           if (this[kContentLength] > limit) {
             this.destroy(new AbortError5());
           }
@@ -9686,7 +9686,7 @@ var require_readable = __commonJS({
             if (signal?.aborted) {
               reject(signal.reason ?? new AbortError5());
             } else {
-              resolve3(null);
+              resolve4(null);
             }
           }).on("error", noop).on("data", function(chunk) {
             limit -= chunk.length;
@@ -9702,16 +9702,16 @@ var require_readable = __commonJS({
     }
     __name(isLocked, "isLocked");
     function isUnusable(self2) {
-      return util6.isDisturbed(self2) || isLocked(self2);
+      return util7.isDisturbed(self2) || isLocked(self2);
     }
     __name(isUnusable, "isUnusable");
-    async function consume(stream3, type) {
-      assert7(!stream3[kConsume]);
-      return new Promise((resolve3, reject) => {
-        if (isUnusable(stream3)) {
-          const rState = stream3._readableState;
+    async function consume(stream4, type) {
+      assert7(!stream4[kConsume]);
+      return new Promise((resolve4, reject) => {
+        if (isUnusable(stream4)) {
+          const rState = stream4._readableState;
           if (rState.destroyed && rState.closeEmitted === false) {
-            stream3.on("error", (err) => {
+            stream4.on("error", (err) => {
               reject(err);
             }).on("close", () => {
               reject(new TypeError("unusable"));
@@ -9721,22 +9721,22 @@ var require_readable = __commonJS({
           }
         } else {
           queueMicrotask(() => {
-            stream3[kConsume] = {
+            stream4[kConsume] = {
               type,
-              stream: stream3,
-              resolve: resolve3,
+              stream: stream4,
+              resolve: resolve4,
               reject,
               length: 0,
               body: []
             };
-            stream3.on("error", function(err) {
+            stream4.on("error", function(err) {
               consumeFinish(this[kConsume], err);
             }).on("close", function() {
               if (this[kConsume].body !== null) {
                 consumeFinish(this[kConsume], new RequestAbortedError());
               }
             });
-            consumeStart(stream3[kConsume]);
+            consumeStart(stream4[kConsume]);
           });
         }
       });
@@ -9798,22 +9798,22 @@ var require_readable = __commonJS({
     }
     __name(chunksConcat, "chunksConcat");
     function consumeEnd(consume2) {
-      const { type, body: body2, resolve: resolve3, stream: stream3, length } = consume2;
+      const { type, body: body2, resolve: resolve4, stream: stream4, length } = consume2;
       try {
         if (type === "text") {
-          resolve3(chunksDecode(body2, length));
+          resolve4(chunksDecode(body2, length));
         } else if (type === "json") {
-          resolve3(JSON.parse(chunksDecode(body2, length)));
+          resolve4(JSON.parse(chunksDecode(body2, length)));
         } else if (type === "arrayBuffer") {
-          resolve3(chunksConcat(body2, length).buffer);
+          resolve4(chunksConcat(body2, length).buffer);
         } else if (type === "blob") {
-          resolve3(new Blob(body2, { type: stream3[kContentType] }));
+          resolve4(new Blob(body2, { type: stream4[kContentType] }));
         } else if (type === "bytes") {
-          resolve3(chunksConcat(body2, length));
+          resolve4(chunksConcat(body2, length));
         }
         consumeFinish(consume2);
       } catch (err) {
-        stream3.destroy(err);
+        stream4.destroy(err);
       }
     }
     __name(consumeEnd, "consumeEnd");
@@ -9912,7 +9912,7 @@ var require_api_request = __commonJS({
     var assert7 = require("node:assert");
     var { Readable: Readable5 } = require_readable();
     var { InvalidArgumentError, RequestAbortedError } = require_errors();
-    var util6 = require_util();
+    var util7 = require_util();
     var { getResolveErrorBodyCallback } = require_util3();
     var { AsyncResource } = require("node:async_hooks");
     var RequestHandler = class extends AsyncResource {
@@ -9942,8 +9942,8 @@ var require_api_request = __commonJS({
           }
           super("UNDICI_REQUEST");
         } catch (err) {
-          if (util6.isStream(body2)) {
-            util6.destroy(body2.on("error", util6.nop), err);
+          if (util7.isStream(body2)) {
+            util7.destroy(body2.on("error", util7.nop), err);
           }
           throw err;
         }
@@ -9962,7 +9962,7 @@ var require_api_request = __commonJS({
         this.signal = signal;
         this.reason = null;
         this.removeAbortListener = null;
-        if (util6.isStream(body2)) {
+        if (util7.isStream(body2)) {
           body2.on("error", (err) => {
             this.onError(err);
           });
@@ -9971,10 +9971,10 @@ var require_api_request = __commonJS({
           if (this.signal.aborted) {
             this.reason = this.signal.reason ?? new RequestAbortedError();
           } else {
-            this.removeAbortListener = util6.addAbortListener(this.signal, () => {
+            this.removeAbortListener = util7.addAbortListener(this.signal, () => {
               this.reason = this.signal.reason ?? new RequestAbortedError();
               if (this.res) {
-                util6.destroy(this.res.on("error", util6.nop), this.reason);
+                util7.destroy(this.res.on("error", util7.nop), this.reason);
               } else if (this.abort) {
                 this.abort(this.reason);
               }
@@ -9998,14 +9998,14 @@ var require_api_request = __commonJS({
       }
       onHeaders(statusCode, rawHeaders, resume, statusMessage) {
         const { callback, opaque, abort, context: context3, responseHeaders, highWaterMark } = this;
-        const headers = responseHeaders === "raw" ? util6.parseRawHeaders(rawHeaders) : util6.parseHeaders(rawHeaders);
+        const headers = responseHeaders === "raw" ? util7.parseRawHeaders(rawHeaders) : util7.parseHeaders(rawHeaders);
         if (statusCode < 200) {
           if (this.onInfo) {
             this.onInfo({ statusCode, headers });
           }
           return;
         }
-        const parsedHeaders = responseHeaders === "raw" ? util6.parseHeaders(rawHeaders) : headers;
+        const parsedHeaders = responseHeaders === "raw" ? util7.parseHeaders(rawHeaders) : headers;
         const contentType2 = parsedHeaders["content-type"];
         const contentLength2 = parsedHeaders["content-length"];
         const res = new Readable5({
@@ -10043,7 +10043,7 @@ var require_api_request = __commonJS({
         return this.res.push(chunk);
       }
       onComplete(trailers) {
-        util6.parseHeaders(trailers, this.trailers);
+        util7.parseHeaders(trailers, this.trailers);
         this.res.push(null);
       }
       onError(err) {
@@ -10057,12 +10057,12 @@ var require_api_request = __commonJS({
         if (res) {
           this.res = null;
           queueMicrotask(() => {
-            util6.destroy(res, err);
+            util7.destroy(res, err);
           });
         }
         if (body2) {
           this.body = null;
-          util6.destroy(body2, err);
+          util7.destroy(body2, err);
         }
         if (this.removeAbortListener) {
           res?.off("close", this.removeAbortListener);
@@ -10073,9 +10073,9 @@ var require_api_request = __commonJS({
     };
     function request(opts, callback) {
       if (callback === void 0) {
-        return new Promise((resolve3, reject) => {
+        return new Promise((resolve4, reject) => {
           request.call(this, opts, (err, data) => {
-            return err ? reject(err) : resolve3(data);
+            return err ? reject(err) : resolve4(data);
           });
         });
       }
@@ -10156,7 +10156,7 @@ var require_api_stream = __commonJS({
     var assert7 = require("node:assert");
     var { finished, PassThrough } = require("node:stream");
     var { InvalidArgumentError, InvalidReturnValueError } = require_errors();
-    var util6 = require_util();
+    var util7 = require_util();
     var { getResolveErrorBodyCallback } = require_util3();
     var { AsyncResource } = require("node:async_hooks");
     var { addSignal, removeSignal } = require_abort_signal();
@@ -10187,8 +10187,8 @@ var require_api_stream = __commonJS({
           }
           super("UNDICI_STREAM");
         } catch (err) {
-          if (util6.isStream(body2)) {
-            util6.destroy(body2.on("error", util6.nop), err);
+          if (util7.isStream(body2)) {
+            util7.destroy(body2.on("error", util7.nop), err);
           }
           throw err;
         }
@@ -10203,7 +10203,7 @@ var require_api_stream = __commonJS({
         this.body = body2;
         this.onInfo = onInfo || null;
         this.throwOnError = throwOnError || false;
-        if (util6.isStream(body2)) {
+        if (util7.isStream(body2)) {
           body2.on("error", (err) => {
             this.onError(err);
           });
@@ -10221,7 +10221,7 @@ var require_api_stream = __commonJS({
       }
       onHeaders(statusCode, rawHeaders, resume, statusMessage) {
         const { factory, opaque, context: context3, callback, responseHeaders } = this;
-        const headers = responseHeaders === "raw" ? util6.parseRawHeaders(rawHeaders) : util6.parseHeaders(rawHeaders);
+        const headers = responseHeaders === "raw" ? util7.parseRawHeaders(rawHeaders) : util7.parseHeaders(rawHeaders);
         if (statusCode < 200) {
           if (this.onInfo) {
             this.onInfo({ statusCode, headers });
@@ -10231,7 +10231,7 @@ var require_api_stream = __commonJS({
         this.factory = null;
         let res;
         if (this.throwOnError && statusCode >= 400) {
-          const parsedHeaders = responseHeaders === "raw" ? util6.parseHeaders(rawHeaders) : headers;
+          const parsedHeaders = responseHeaders === "raw" ? util7.parseHeaders(rawHeaders) : headers;
           const contentType2 = parsedHeaders["content-type"];
           res = new PassThrough();
           this.callback = null;
@@ -10257,7 +10257,7 @@ var require_api_stream = __commonJS({
             const { callback: callback2, res: res2, opaque: opaque2, trailers, abort } = this;
             this.res = null;
             if (err || !res2.readable) {
-              util6.destroy(res2, err);
+              util7.destroy(res2, err);
             }
             this.callback = null;
             this.runInAsyncScope(callback2, null, err || null, { opaque: opaque2, trailers });
@@ -10281,7 +10281,7 @@ var require_api_stream = __commonJS({
         if (!res) {
           return;
         }
-        this.trailers = util6.parseHeaders(trailers);
+        this.trailers = util7.parseHeaders(trailers);
         res.end();
       }
       onError(err) {
@@ -10290,7 +10290,7 @@ var require_api_stream = __commonJS({
         this.factory = null;
         if (res) {
           this.res = null;
-          util6.destroy(res, err);
+          util7.destroy(res, err);
         } else if (callback) {
           this.callback = null;
           queueMicrotask(() => {
@@ -10299,15 +10299,15 @@ var require_api_stream = __commonJS({
         }
         if (body2) {
           this.body = null;
-          util6.destroy(body2, err);
+          util7.destroy(body2, err);
         }
       }
     };
-    function stream3(opts, factory, callback) {
+    function stream4(opts, factory, callback) {
       if (callback === void 0) {
-        return new Promise((resolve3, reject) => {
-          stream3.call(this, opts, factory, (err, data) => {
-            return err ? reject(err) : resolve3(data);
+        return new Promise((resolve4, reject) => {
+          stream4.call(this, opts, factory, (err, data) => {
+            return err ? reject(err) : resolve4(data);
           });
         });
       }
@@ -10321,8 +10321,8 @@ var require_api_stream = __commonJS({
         queueMicrotask(() => callback(err, { opaque }));
       }
     }
-    __name(stream3, "stream");
-    module2.exports = stream3;
+    __name(stream4, "stream");
+    module2.exports = stream4;
   }
 });
 
@@ -10340,7 +10340,7 @@ var require_api_pipeline = __commonJS({
       InvalidReturnValueError,
       RequestAbortedError
     } = require_errors();
-    var util6 = require_util();
+    var util7 = require_util();
     var { AsyncResource } = require("node:async_hooks");
     var { addSignal, removeSignal } = require_abort_signal();
     var assert7 = require("node:assert");
@@ -10411,7 +10411,7 @@ var require_api_pipeline = __commonJS({
         this.abort = null;
         this.context = null;
         this.onInfo = onInfo || null;
-        this.req = new PipelineRequest().on("error", util6.nop);
+        this.req = new PipelineRequest().on("error", util7.nop);
         this.ret = new Duplex({
           readableObjectMode: opts.objectMode,
           autoDestroy: true,
@@ -10437,9 +10437,9 @@ var require_api_pipeline = __commonJS({
             if (abort && err) {
               abort();
             }
-            util6.destroy(body2, err);
-            util6.destroy(req, err);
-            util6.destroy(res, err);
+            util7.destroy(body2, err);
+            util7.destroy(req, err);
+            util7.destroy(res, err);
             removeSignal(this);
             callback(err);
           }, "destroy")
@@ -10465,7 +10465,7 @@ var require_api_pipeline = __commonJS({
         const { opaque, handler, context: context3 } = this;
         if (statusCode < 200) {
           if (this.onInfo) {
-            const headers = this.responseHeaders === "raw" ? util6.parseRawHeaders(rawHeaders) : util6.parseHeaders(rawHeaders);
+            const headers = this.responseHeaders === "raw" ? util7.parseRawHeaders(rawHeaders) : util7.parseHeaders(rawHeaders);
             this.onInfo({ statusCode, headers });
           }
           return;
@@ -10474,7 +10474,7 @@ var require_api_pipeline = __commonJS({
         let body2;
         try {
           this.handler = null;
-          const headers = this.responseHeaders === "raw" ? util6.parseRawHeaders(rawHeaders) : util6.parseHeaders(rawHeaders);
+          const headers = this.responseHeaders === "raw" ? util7.parseRawHeaders(rawHeaders) : util7.parseHeaders(rawHeaders);
           body2 = this.runInAsyncScope(handler, null, {
             statusCode,
             headers,
@@ -10483,7 +10483,7 @@ var require_api_pipeline = __commonJS({
             context: context3
           });
         } catch (err) {
-          this.res.on("error", util6.nop);
+          this.res.on("error", util7.nop);
           throw err;
         }
         if (!body2 || typeof body2.on !== "function") {
@@ -10496,14 +10496,14 @@ var require_api_pipeline = __commonJS({
           }
         }).on("error", (err) => {
           const { ret } = this;
-          util6.destroy(ret, err);
+          util7.destroy(ret, err);
         }).on("end", () => {
           const { ret } = this;
           ret.push(null);
         }).on("close", () => {
           const { ret } = this;
           if (!ret._readableState.ended) {
-            util6.destroy(ret, new RequestAbortedError());
+            util7.destroy(ret, new RequestAbortedError());
           }
         });
         this.body = body2;
@@ -10519,10 +10519,10 @@ var require_api_pipeline = __commonJS({
       onError(err) {
         const { ret } = this;
         this.handler = null;
-        util6.destroy(ret, err);
+        util7.destroy(ret, err);
       }
     };
-    function pipeline3(opts, handler) {
+    function pipeline4(opts, handler) {
       try {
         const pipelineHandler = new PipelineHandler(opts, handler);
         this.dispatch({ ...opts, body: pipelineHandler.req }, pipelineHandler);
@@ -10531,8 +10531,8 @@ var require_api_pipeline = __commonJS({
         return new PassThrough().destroy(err);
       }
     }
-    __name(pipeline3, "pipeline");
-    module2.exports = pipeline3;
+    __name(pipeline4, "pipeline");
+    module2.exports = pipeline4;
   }
 });
 
@@ -10542,7 +10542,7 @@ var require_api_upgrade = __commonJS({
     "use strict";
     var { InvalidArgumentError, SocketError } = require_errors();
     var { AsyncResource } = require("node:async_hooks");
-    var util6 = require_util();
+    var util7 = require_util();
     var { addSignal, removeSignal } = require_abort_signal();
     var assert7 = require("node:assert");
     var UpgradeHandler = class extends AsyncResource {
@@ -10585,7 +10585,7 @@ var require_api_upgrade = __commonJS({
         const { callback, opaque, context: context3 } = this;
         removeSignal(this);
         this.callback = null;
-        const headers = this.responseHeaders === "raw" ? util6.parseRawHeaders(rawHeaders) : util6.parseHeaders(rawHeaders);
+        const headers = this.responseHeaders === "raw" ? util7.parseRawHeaders(rawHeaders) : util7.parseHeaders(rawHeaders);
         this.runInAsyncScope(callback, null, null, {
           headers,
           socket,
@@ -10606,9 +10606,9 @@ var require_api_upgrade = __commonJS({
     };
     function upgrade(opts, callback) {
       if (callback === void 0) {
-        return new Promise((resolve3, reject) => {
+        return new Promise((resolve4, reject) => {
           upgrade.call(this, opts, (err, data) => {
-            return err ? reject(err) : resolve3(data);
+            return err ? reject(err) : resolve4(data);
           });
         });
       }
@@ -10639,7 +10639,7 @@ var require_api_connect = __commonJS({
     var assert7 = require("node:assert");
     var { AsyncResource } = require("node:async_hooks");
     var { InvalidArgumentError, SocketError } = require_errors();
-    var util6 = require_util();
+    var util7 = require_util();
     var { addSignal, removeSignal } = require_abort_signal();
     var ConnectHandler = class extends AsyncResource {
       static {
@@ -10681,7 +10681,7 @@ var require_api_connect = __commonJS({
         this.callback = null;
         let headers = rawHeaders;
         if (headers != null) {
-          headers = this.responseHeaders === "raw" ? util6.parseRawHeaders(rawHeaders) : util6.parseHeaders(rawHeaders);
+          headers = this.responseHeaders === "raw" ? util7.parseRawHeaders(rawHeaders) : util7.parseHeaders(rawHeaders);
         }
         this.runInAsyncScope(callback, null, null, {
           statusCode,
@@ -10704,9 +10704,9 @@ var require_api_connect = __commonJS({
     };
     function connect(opts, callback) {
       if (callback === void 0) {
-        return new Promise((resolve3, reject) => {
+        return new Promise((resolve4, reject) => {
           connect.call(this, opts, (err, data) => {
-            return err ? reject(err) : resolve3(data);
+            return err ? reject(err) : resolve4(data);
           });
         });
       }
@@ -10880,21 +10880,21 @@ var require_mock_utils = __commonJS({
       return true;
     }
     __name(matchHeaders, "matchHeaders");
-    function safeUrl(path21) {
-      if (typeof path21 !== "string") {
-        return path21;
+    function safeUrl(path22) {
+      if (typeof path22 !== "string") {
+        return path22;
       }
-      const pathSegments = path21.split("?");
+      const pathSegments = path22.split("?");
       if (pathSegments.length !== 2) {
-        return path21;
+        return path22;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
     __name(safeUrl, "safeUrl");
-    function matchKey(mockDispatch2, { path: path21, method, body: body2, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path21);
+    function matchKey(mockDispatch2, { path: path22, method, body: body2, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path22);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body2) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10918,7 +10918,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path21 }) => matchValue(safeUrl(path21), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path22 }) => matchValue(safeUrl(path22), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10959,9 +10959,9 @@ var require_mock_utils = __commonJS({
     }
     __name(deleteMockDispatch, "deleteMockDispatch");
     function buildKey(opts) {
-      const { path: path21, method, body: body2, headers, query } = opts;
+      const { path: path22, method, body: body2, headers, query } = opts;
       return {
-        path: path21,
+        path: path22,
         method,
         body: body2,
         headers,
@@ -11283,7 +11283,7 @@ var require_mock_interceptor = __commonJS({
 var require_mock_client = __commonJS({
   "node_modules/undici/lib/mock/mock-client.js"(exports2, module2) {
     "use strict";
-    var { promisify: promisify4 } = require("node:util");
+    var { promisify: promisify5 } = require("node:util");
     var Client = require_client();
     var { buildMockDispatch } = require_mock_utils();
     var {
@@ -11326,7 +11326,7 @@ var require_mock_client = __commonJS({
         return new MockInterceptor(opts, this[kDispatches]);
       }
       async [kClose]() {
-        await promisify4(this[kOriginalClose])();
+        await promisify5(this[kOriginalClose])();
         this[kConnected] = 0;
         this[kMockAgent][Symbols.kClients].delete(this[kOrigin]);
       }
@@ -11339,7 +11339,7 @@ var require_mock_client = __commonJS({
 var require_mock_pool = __commonJS({
   "node_modules/undici/lib/mock/mock-pool.js"(exports2, module2) {
     "use strict";
-    var { promisify: promisify4 } = require("node:util");
+    var { promisify: promisify5 } = require("node:util");
     var Pool = require_pool();
     var { buildMockDispatch } = require_mock_utils();
     var {
@@ -11382,7 +11382,7 @@ var require_mock_pool = __commonJS({
         return new MockInterceptor(opts, this[kDispatches]);
       }
       async [kClose]() {
-        await promisify4(this[kOriginalClose])();
+        await promisify5(this[kOriginalClose])();
         this[kConnected] = 0;
         this[kMockAgent][Symbols.kClients].delete(this[kOrigin]);
       }
@@ -11452,10 +11452,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path21, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path22, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path21,
+            Path: path22,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -11732,7 +11732,7 @@ var require_retry = __commonJS({
 var require_dump = __commonJS({
   "node_modules/undici/lib/interceptor/dump.js"(exports2, module2) {
     "use strict";
-    var util6 = require_util();
+    var util7 = require_util();
     var { InvalidArgumentError, RequestAbortedError } = require_errors();
     var DecoratorHandler = require_decorator_handler();
     var DumpHandler = class extends DecoratorHandler {
@@ -11764,7 +11764,7 @@ var require_dump = __commonJS({
       }
       // TODO: will require adjustment after new hooks are out
       onHeaders(statusCode, rawHeaders, resume, statusMessage) {
-        const headers = util6.parseHeaders(rawHeaders);
+        const headers = util7.parseHeaders(rawHeaders);
         const contentLength2 = headers["content-length"];
         if (contentLength2 != null && contentLength2 > this.#maxSize) {
           throw new RequestAbortedError(
@@ -12138,7 +12138,7 @@ var require_headers = __commonJS({
     } = require_util2();
     var { webidl } = require_webidl();
     var assert7 = require("node:assert");
-    var util6 = require("node:util");
+    var util7 = require("node:util");
     var kHeadersMap = /* @__PURE__ */ Symbol("headers map");
     var kHeadersSortedMap = /* @__PURE__ */ Symbol("headers map sorted");
     function isHTTPWhiteSpaceCharCode(code) {
@@ -12508,9 +12508,9 @@ var require_headers = __commonJS({
         }
         return this.#headersList[kHeadersSortedMap] = headers;
       }
-      [util6.inspect.custom](depth, options) {
+      [util7.inspect.custom](depth, options) {
         options.depth ??= depth;
-        return `Headers ${util6.formatWithOptions(options, this.#headersList.entries)}`;
+        return `Headers ${util7.formatWithOptions(options, this.#headersList.entries)}`;
       }
       static getHeadersGuard(o) {
         return o.#guard;
@@ -12542,14 +12542,14 @@ var require_headers = __commonJS({
         value: "Headers",
         configurable: true
       },
-      [util6.inspect.custom]: {
+      [util7.inspect.custom]: {
         enumerable: false
       }
     });
     webidl.converters.HeadersInit = function(V, prefix2, argument) {
       if (webidl.util.Type(V) === "Object") {
         const iterator = Reflect.get(V, Symbol.iterator);
-        if (!util6.types.isProxy(V) && iterator === Headers2.prototype.entries) {
+        if (!util7.types.isProxy(V) && iterator === Headers2.prototype.entries) {
           try {
             return getHeadersList(V).entriesList;
           } catch {
@@ -12586,9 +12586,9 @@ var require_response = __commonJS({
     "use strict";
     var { Headers: Headers2, HeadersList, fill, getHeadersGuard, setHeadersGuard, setHeadersList } = require_headers();
     var { extractBody, cloneBody, mixinBody, hasFinalizationRegistry, streamRegistry, bodyUnusable } = require_body();
-    var util6 = require_util();
+    var util7 = require_util();
     var nodeUtil = require("node:util");
-    var { kEnumerableProperty } = util6;
+    var { kEnumerableProperty } = util7;
     var {
       isValidReasonPhrase,
       isCancelled,
@@ -12721,7 +12721,7 @@ var require_response = __commonJS({
       }
       get bodyUsed() {
         webidl.brandCheck(this, _Response);
-        return !!this[kState].body && util6.isDisturbed(this[kState].body.stream);
+        return !!this[kState].body && util7.isDisturbed(this[kState].body.stream);
       }
       // Returns a clone of response.
       clone() {
@@ -12945,7 +12945,7 @@ var require_response = __commonJS({
       if (ArrayBuffer.isView(V) || types2.isArrayBuffer(V)) {
         return webidl.converters.BufferSource(V, prefix2, name);
       }
-      if (util6.isFormDataLike(V)) {
+      if (util7.isFormDataLike(V)) {
         return webidl.converters.FormData(V, prefix2, name, { strict: false });
       }
       if (V instanceof URLSearchParams) {
@@ -13046,7 +13046,7 @@ var require_request2 = __commonJS({
     var { extractBody, mixinBody, cloneBody, bodyUnusable } = require_body();
     var { Headers: Headers2, fill: fillHeaders, HeadersList, setHeadersGuard, getHeadersGuard, setHeadersList, getHeadersList } = require_headers();
     var { FinalizationRegistry: FinalizationRegistry2 } = require_dispatcher_weakref()();
-    var util6 = require_util();
+    var util7 = require_util();
     var nodeUtil = require("node:util");
     var {
       isValidHTTPToken,
@@ -13063,7 +13063,7 @@ var require_request2 = __commonJS({
       requestCache,
       requestDuplex
     } = require_constants3();
-    var { kEnumerableProperty, normalizedMethodRecordsBase, normalizedMethodRecords } = util6;
+    var { kEnumerableProperty, normalizedMethodRecordsBase, normalizedMethodRecords } = util7;
     var { kHeaders, kSignal, kState, kDispatcher } = require_symbols2();
     var { webidl } = require_webidl();
     var { URLSerializer } = require_data_url();
@@ -13313,7 +13313,7 @@ var require_request2 = __commonJS({
               }
             } catch {
             }
-            util6.addAbortListener(signal, abort);
+            util7.addAbortListener(signal, abort);
             requestFinalizer.register(ac, { signal, abort }, abort);
           }
         }
@@ -13496,7 +13496,7 @@ var require_request2 = __commonJS({
       }
       get bodyUsed() {
         webidl.brandCheck(this, _Request);
-        return !!this[kState].body && util6.isDisturbed(this[kState].body.stream);
+        return !!this[kState].body && util7.isDisturbed(this[kState].body.stream);
       }
       get duplex() {
         webidl.brandCheck(this, _Request);
@@ -13520,7 +13520,7 @@ var require_request2 = __commonJS({
           }
           const acRef = new WeakRef(ac);
           list.add(acRef);
-          util6.addAbortListener(
+          util7.addAbortListener(
             ac.signal,
             buildAbort(acRef)
           );
@@ -13802,7 +13802,7 @@ var require_fetch = __commonJS({
       subresourceSet
     } = require_constants3();
     var EE = require("node:events");
-    var { Readable: Readable5, pipeline: pipeline3, finished } = require("node:stream");
+    var { Readable: Readable5, pipeline: pipeline4, finished } = require("node:stream");
     var { addAbortListener, isErrored, isReadable, bufferToLowerCasedHeaderName } = require_util();
     var { dataURLProcessor, serializeAMimeType, minimizeSupportedMimeType } = require_data_url();
     var { getGlobalDispatcher } = require_global2();
@@ -14602,7 +14602,7 @@ var require_fetch = __commonJS({
           fetchParams.controller.abort(reason);
         }
       }, "cancelAlgorithm");
-      const stream3 = new ReadableStream(
+      const stream4 = new ReadableStream(
         {
           async start(controller) {
             fetchParams.controller.controller = controller;
@@ -14616,7 +14616,7 @@ var require_fetch = __commonJS({
           type: "bytes"
         }
       );
-      response.body = { stream: stream3, source: null, length: null };
+      response.body = { stream: stream4, source: null, length: null };
       fetchParams.controller.onAborted = onAborted;
       fetchParams.controller.on("terminated", onAborted);
       fetchParams.controller.resume = async () => {
@@ -14651,7 +14651,7 @@ var require_fetch = __commonJS({
           if (buffer3.byteLength) {
             fetchParams.controller.controller.enqueue(buffer3);
           }
-          if (isErrored(stream3)) {
+          if (isErrored(stream4)) {
             fetchParams.controller.terminate();
             return;
           }
@@ -14663,13 +14663,13 @@ var require_fetch = __commonJS({
       function onAborted(reason) {
         if (isAborted(fetchParams)) {
           response.aborted = true;
-          if (isReadable(stream3)) {
+          if (isReadable(stream4)) {
             fetchParams.controller.controller.error(
               fetchParams.controller.serializedAbortReason
             );
           }
         } else {
-          if (isReadable(stream3)) {
+          if (isReadable(stream4)) {
             fetchParams.controller.controller.error(new TypeError("terminated", {
               cause: isErrorLike(reason) ? reason : void 0
             }));
@@ -14682,7 +14682,7 @@ var require_fetch = __commonJS({
       function dispatch({ body: body2 }) {
         const url2 = requestCurrentURL(request);
         const agent = fetchParams.controller.dispatcher;
-        return new Promise((resolve3, reject) => agent.dispatch(
+        return new Promise((resolve4, reject) => agent.dispatch(
           {
             path: url2.pathname + url2.search,
             origin: url2.origin,
@@ -14758,11 +14758,11 @@ var require_fetch = __commonJS({
                 }
               }
               const onError = this.onError.bind(this);
-              resolve3({
+              resolve4({
                 status,
                 statusText,
                 headersList,
-                body: decoders.length ? pipeline3(this.body, ...decoders, (err) => {
+                body: decoders.length ? pipeline4(this.body, ...decoders, (err) => {
                   if (err) {
                     this.onError(err);
                   }
@@ -14804,7 +14804,7 @@ var require_fetch = __commonJS({
               for (let i = 0; i < rawHeaders.length; i += 2) {
                 headersList.append(bufferToLowerCasedHeaderName(rawHeaders[i]), rawHeaders[i + 1].toString("latin1"), true);
               }
-              resolve3({
+              resolve4({
                 status,
                 statusText: STATUS_CODES[status],
                 headersList,
@@ -15229,8 +15229,8 @@ var require_util4 = __commonJS({
       fr[kState] = "loading";
       fr[kResult] = null;
       fr[kError] = null;
-      const stream3 = blob.stream();
-      const reader = stream3.getReader();
+      const stream4 = blob.stream();
+      const reader = stream4.getReader();
       const bytes = [];
       let chunkPromise = reader.read();
       let isFirstChunk = true;
@@ -15903,8 +15903,8 @@ var require_cache = __commonJS({
         const clonedResponse = cloneResponse(innerResponse);
         const bodyReadPromise = createDeferredPromise();
         if (innerResponse.body != null) {
-          const stream3 = innerResponse.body.stream;
-          const reader = stream3.getReader();
+          const stream4 = innerResponse.body.stream;
+          const reader = stream4.getReader();
           readAllBytes(reader).then(bodyReadPromise.resolve, bodyReadPromise.reject);
         } else {
           bodyReadPromise.resolve(void 0);
@@ -16433,9 +16433,9 @@ var require_util6 = __commonJS({
       }
     }
     __name(validateCookieValue, "validateCookieValue");
-    function validateCookiePath(path21) {
-      for (let i = 0; i < path21.length; ++i) {
-        const code = path21.charCodeAt(i);
+    function validateCookiePath(path22) {
+      for (let i = 0; i < path22.length; ++i) {
+        const code = path22.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
         code === 127 || // DEL
         code === 59) {
@@ -18532,8 +18532,8 @@ var require_util8 = __commonJS({
     }
     __name(isASCIINumber, "isASCIINumber");
     function delay4(ms) {
-      return new Promise((resolve3) => {
-        setTimeout(resolve3, ms).unref();
+      return new Promise((resolve4) => {
+        setTimeout(resolve4, ms).unref();
       });
     }
     __name(delay4, "delay");
@@ -18782,7 +18782,7 @@ ${value}`;
 var require_eventsource = __commonJS({
   "node_modules/undici/lib/web/eventsource/eventsource.js"(exports2, module2) {
     "use strict";
-    var { pipeline: pipeline3 } = require("node:stream");
+    var { pipeline: pipeline4 } = require("node:stream");
     var { fetching } = require_fetch();
     var { makeRequest } = require_request2();
     var { webidl } = require_webidl();
@@ -18943,7 +18943,7 @@ var require_eventsource = __commonJS({
               ));
             }, "push")
           });
-          pipeline3(
+          pipeline4(
             response.body.stream,
             eventSourceStream,
             (error2) => {
@@ -19091,7 +19091,7 @@ var require_undici = __commonJS({
     var EnvHttpProxyAgent = require_env_http_proxy_agent();
     var RetryAgent = require_retry_agent();
     var errors = require_errors();
-    var util6 = require_util();
+    var util7 = require_util();
     var { InvalidArgumentError } = errors;
     var api = require_api();
     var buildConnector = require_connect();
@@ -19126,8 +19126,8 @@ var require_undici = __commonJS({
     module2.exports.buildConnector = buildConnector;
     module2.exports.errors = errors;
     module2.exports.util = {
-      parseHeaders: util6.parseHeaders,
-      headerNameToString: util6.headerNameToString
+      parseHeaders: util7.parseHeaders,
+      headerNameToString: util7.headerNameToString
     };
     function makeDispatcher(fn) {
       return (url2, opts, handler) => {
@@ -19145,16 +19145,16 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path21 = opts.path;
+          let path22 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path21 = `/${path21}`;
+            path22 = `/${path22}`;
           }
-          url2 = new URL(util6.parseOrigin(url2).origin + path21);
+          url2 = new URL(util7.parseOrigin(url2).origin + path22);
         } else {
           if (!opts) {
             opts = typeof url2 === "object" ? url2 : {};
           }
-          url2 = util6.parseURL(url2);
+          url2 = util7.parseURL(url2);
         }
         const { agent, dispatcher = getGlobalDispatcher() } = opts;
         if (agent) {
@@ -19459,7 +19459,7 @@ var require_minimatch = __commonJS({
   "node_modules/minimatch/minimatch.js"(exports2, module2) {
     module2.exports = minimatch3;
     minimatch3.Minimatch = Minimatch3;
-    var path21 = (function() {
+    var path22 = (function() {
       try {
         return require("path");
       } catch (e) {
@@ -19467,7 +19467,7 @@ var require_minimatch = __commonJS({
     })() || {
       sep: "/"
     };
-    minimatch3.sep = path21.sep;
+    minimatch3.sep = path22.sep;
     var GLOBSTAR2 = minimatch3.GLOBSTAR = Minimatch3.GLOBSTAR = {};
     var expand2 = require_brace_expansion();
     var plTypes = {
@@ -19560,8 +19560,8 @@ var require_minimatch = __commonJS({
       assertValidPattern2(pattern);
       if (!options) options = {};
       pattern = pattern.trim();
-      if (!options.allowWindowsEscape && path21.sep !== "/") {
-        pattern = pattern.split(path21.sep).join("/");
+      if (!options.allowWindowsEscape && path22.sep !== "/") {
+        pattern = pattern.split(path22.sep).join("/");
       }
       this.options = options;
       this.maxGlobstarRecursion = options.maxGlobstarRecursion !== void 0 ? options.maxGlobstarRecursion : 200;
@@ -19939,8 +19939,8 @@ var require_minimatch = __commonJS({
       if (this.empty) return f === "";
       if (f === "/" && partial) return true;
       var options = this.options;
-      if (path21.sep !== "/") {
-        f = f.split(path21.sep).join("/");
+      if (path22.sep !== "/") {
+        f = f.split(path22.sep).join("/");
       }
       f = f.split(slashSplit);
       this.debug(this.pattern, "split", f);
@@ -22632,14 +22632,14 @@ var require_browser = __commonJS({
 var require_node = __commonJS({
   "node_modules/debug/src/node.js"(exports2, module2) {
     var tty = require("tty");
-    var util6 = require("util");
+    var util7 = require("util");
     exports2.init = init;
     exports2.log = log2;
     exports2.formatArgs = formatArgs;
     exports2.save = save;
     exports2.load = load;
     exports2.useColors = useColors;
-    exports2.destroy = util6.deprecate(
+    exports2.destroy = util7.deprecate(
       () => {
       },
       "Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`."
@@ -22773,7 +22773,7 @@ var require_node = __commonJS({
     }
     __name(getDate, "getDate");
     function log2(...args) {
-      return process.stderr.write(util6.formatWithOptions(exports2.inspectOpts, ...args) + "\n");
+      return process.stderr.write(util7.formatWithOptions(exports2.inspectOpts, ...args) + "\n");
     }
     __name(log2, "log");
     function save(namespaces) {
@@ -22800,11 +22800,11 @@ var require_node = __commonJS({
     var { formatters } = module2.exports;
     formatters.o = function(v) {
       this.inspectOpts.colors = this.useColors;
-      return util6.inspect(v, this.inspectOpts).split("\n").map((str) => str.trim()).join(" ");
+      return util7.inspect(v, this.inspectOpts).split("\n").map((str) => str.trim()).join(" ");
     };
     formatters.O = function(v) {
       this.inspectOpts.colors = this.useColors;
-      return util6.inspect(v, this.inspectOpts);
+      return util7.inspect(v, this.inspectOpts);
     };
   }
 });
@@ -22855,10 +22855,10 @@ var require_helpers = __commonJS({
     exports2.req = exports2.json = exports2.toBuffer = void 0;
     var http3 = __importStar(require("http"));
     var https3 = __importStar(require("https"));
-    async function toBuffer(stream3) {
+    async function toBuffer(stream4) {
       let length = 0;
       const chunks = [];
-      for await (const chunk of stream3) {
+      for await (const chunk of stream4) {
         length += chunk.length;
         chunks.push(chunk);
       }
@@ -22866,8 +22866,8 @@ var require_helpers = __commonJS({
     }
     __name(toBuffer, "toBuffer");
     exports2.toBuffer = toBuffer;
-    async function json(stream3) {
-      const buf = await toBuffer(stream3);
+    async function json(stream4) {
+      const buf = await toBuffer(stream4);
       const str = buf.toString("utf8");
       try {
         return JSON.parse(str);
@@ -22882,8 +22882,8 @@ var require_helpers = __commonJS({
     function req(url2, opts = {}) {
       const href = typeof url2 === "string" ? url2 : url2.href;
       const req2 = (href.startsWith("https:") ? https3 : http3).request(url2, opts);
-      const promise = new Promise((resolve3, reject) => {
-        req2.once("response", resolve3).once("error", reject).end();
+      const promise = new Promise((resolve4, reject) => {
+        req2.once("response", resolve4).once("error", reject).end();
       });
       req2.then = promise.then.bind(promise);
       return req2;
@@ -23064,7 +23064,7 @@ var require_parse_proxy_response = __commonJS({
     var debug_1 = __importDefault(require_src());
     var debug2 = (0, debug_1.default)("https-proxy-agent:parse-proxy-response");
     function parseProxyResponse(socket) {
-      return new Promise((resolve3, reject) => {
+      return new Promise((resolve4, reject) => {
         let buffersLength = 0;
         const buffers = [];
         function read() {
@@ -23134,7 +23134,7 @@ var require_parse_proxy_response = __commonJS({
           }
           debug2("got proxy server response: %o %o", firstLine, headers);
           cleanup();
-          resolve3({
+          resolve4({
             connect: {
               statusCode,
               statusText,
@@ -26903,8 +26903,8 @@ var require_deferred = __commonJS({
        */
       constructor(preventUnhandledRejectionWarning = true) {
         this._state = DeferredState.PENDING;
-        this._promise = new Promise((resolve3, reject) => {
-          this._resolve = resolve3;
+        this._promise = new Promise((resolve4, reject) => {
+          this._resolve = resolve4;
           this._reject = reject;
         });
         if (preventUnhandledRejectionWarning) {
@@ -27120,14 +27120,14 @@ var require_rpc_output_stream = __commonJS({
 var require_unary_call = __commonJS({
   "node_modules/@protobuf-ts/runtime-rpc/build/commonjs/unary-call.js"(exports2) {
     "use strict";
-    var __awaiter22 = exports2 && exports2.__awaiter || function(thisArg, _arguments, P, generator) {
+    var __awaiter23 = exports2 && exports2.__awaiter || function(thisArg, _arguments, P, generator) {
       function adopt(value) {
-        return value instanceof P ? value : new P(function(resolve3) {
-          resolve3(value);
+        return value instanceof P ? value : new P(function(resolve4) {
+          resolve4(value);
         });
       }
       __name(adopt, "adopt");
-      return new (P || (P = Promise))(function(resolve3, reject) {
+      return new (P || (P = Promise))(function(resolve4, reject) {
         function fulfilled(value) {
           try {
             step(generator.next(value));
@@ -27145,7 +27145,7 @@ var require_unary_call = __commonJS({
         }
         __name(rejected, "rejected");
         function step(result) {
-          result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+          result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
         }
         __name(step, "step");
         step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -27174,7 +27174,7 @@ var require_unary_call = __commonJS({
         return this.promiseFinished().then((value) => onfulfilled ? Promise.resolve(onfulfilled(value)) : value, (reason) => onrejected ? Promise.resolve(onrejected(reason)) : Promise.reject(reason));
       }
       promiseFinished() {
-        return __awaiter22(this, void 0, void 0, function* () {
+        return __awaiter23(this, void 0, void 0, function* () {
           let [headers, response, status, trailers] = yield Promise.all([this.headers, this.response, this.status, this.trailers]);
           return {
             method: this.method,
@@ -27196,14 +27196,14 @@ var require_unary_call = __commonJS({
 var require_server_streaming_call = __commonJS({
   "node_modules/@protobuf-ts/runtime-rpc/build/commonjs/server-streaming-call.js"(exports2) {
     "use strict";
-    var __awaiter22 = exports2 && exports2.__awaiter || function(thisArg, _arguments, P, generator) {
+    var __awaiter23 = exports2 && exports2.__awaiter || function(thisArg, _arguments, P, generator) {
       function adopt(value) {
-        return value instanceof P ? value : new P(function(resolve3) {
-          resolve3(value);
+        return value instanceof P ? value : new P(function(resolve4) {
+          resolve4(value);
         });
       }
       __name(adopt, "adopt");
-      return new (P || (P = Promise))(function(resolve3, reject) {
+      return new (P || (P = Promise))(function(resolve4, reject) {
         function fulfilled(value) {
           try {
             step(generator.next(value));
@@ -27221,7 +27221,7 @@ var require_server_streaming_call = __commonJS({
         }
         __name(rejected, "rejected");
         function step(result) {
-          result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+          result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
         }
         __name(step, "step");
         step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -27252,7 +27252,7 @@ var require_server_streaming_call = __commonJS({
         return this.promiseFinished().then((value) => onfulfilled ? Promise.resolve(onfulfilled(value)) : value, (reason) => onrejected ? Promise.resolve(onrejected(reason)) : Promise.reject(reason));
       }
       promiseFinished() {
-        return __awaiter22(this, void 0, void 0, function* () {
+        return __awaiter23(this, void 0, void 0, function* () {
           let [headers, status, trailers] = yield Promise.all([this.headers, this.status, this.trailers]);
           return {
             method: this.method,
@@ -27273,14 +27273,14 @@ var require_server_streaming_call = __commonJS({
 var require_client_streaming_call = __commonJS({
   "node_modules/@protobuf-ts/runtime-rpc/build/commonjs/client-streaming-call.js"(exports2) {
     "use strict";
-    var __awaiter22 = exports2 && exports2.__awaiter || function(thisArg, _arguments, P, generator) {
+    var __awaiter23 = exports2 && exports2.__awaiter || function(thisArg, _arguments, P, generator) {
       function adopt(value) {
-        return value instanceof P ? value : new P(function(resolve3) {
-          resolve3(value);
+        return value instanceof P ? value : new P(function(resolve4) {
+          resolve4(value);
         });
       }
       __name(adopt, "adopt");
-      return new (P || (P = Promise))(function(resolve3, reject) {
+      return new (P || (P = Promise))(function(resolve4, reject) {
         function fulfilled(value) {
           try {
             step(generator.next(value));
@@ -27298,7 +27298,7 @@ var require_client_streaming_call = __commonJS({
         }
         __name(rejected, "rejected");
         function step(result) {
-          result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+          result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
         }
         __name(step, "step");
         step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -27328,7 +27328,7 @@ var require_client_streaming_call = __commonJS({
         return this.promiseFinished().then((value) => onfulfilled ? Promise.resolve(onfulfilled(value)) : value, (reason) => onrejected ? Promise.resolve(onrejected(reason)) : Promise.reject(reason));
       }
       promiseFinished() {
-        return __awaiter22(this, void 0, void 0, function* () {
+        return __awaiter23(this, void 0, void 0, function* () {
           let [headers, response, status, trailers] = yield Promise.all([this.headers, this.response, this.status, this.trailers]);
           return {
             method: this.method,
@@ -27349,14 +27349,14 @@ var require_client_streaming_call = __commonJS({
 var require_duplex_streaming_call = __commonJS({
   "node_modules/@protobuf-ts/runtime-rpc/build/commonjs/duplex-streaming-call.js"(exports2) {
     "use strict";
-    var __awaiter22 = exports2 && exports2.__awaiter || function(thisArg, _arguments, P, generator) {
+    var __awaiter23 = exports2 && exports2.__awaiter || function(thisArg, _arguments, P, generator) {
       function adopt(value) {
-        return value instanceof P ? value : new P(function(resolve3) {
-          resolve3(value);
+        return value instanceof P ? value : new P(function(resolve4) {
+          resolve4(value);
         });
       }
       __name(adopt, "adopt");
-      return new (P || (P = Promise))(function(resolve3, reject) {
+      return new (P || (P = Promise))(function(resolve4, reject) {
         function fulfilled(value) {
           try {
             step(generator.next(value));
@@ -27374,7 +27374,7 @@ var require_duplex_streaming_call = __commonJS({
         }
         __name(rejected, "rejected");
         function step(result) {
-          result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+          result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
         }
         __name(step, "step");
         step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -27404,7 +27404,7 @@ var require_duplex_streaming_call = __commonJS({
         return this.promiseFinished().then((value) => onfulfilled ? Promise.resolve(onfulfilled(value)) : value, (reason) => onrejected ? Promise.resolve(onrejected(reason)) : Promise.reject(reason));
       }
       promiseFinished() {
-        return __awaiter22(this, void 0, void 0, function* () {
+        return __awaiter23(this, void 0, void 0, function* () {
           let [headers, status, trailers] = yield Promise.all([this.headers, this.status, this.trailers]);
           return {
             method: this.method,
@@ -27424,14 +27424,14 @@ var require_duplex_streaming_call = __commonJS({
 var require_test_transport = __commonJS({
   "node_modules/@protobuf-ts/runtime-rpc/build/commonjs/test-transport.js"(exports2) {
     "use strict";
-    var __awaiter22 = exports2 && exports2.__awaiter || function(thisArg, _arguments, P, generator) {
+    var __awaiter23 = exports2 && exports2.__awaiter || function(thisArg, _arguments, P, generator) {
       function adopt(value) {
-        return value instanceof P ? value : new P(function(resolve3) {
-          resolve3(value);
+        return value instanceof P ? value : new P(function(resolve4) {
+          resolve4(value);
         });
       }
       __name(adopt, "adopt");
-      return new (P || (P = Promise))(function(resolve3, reject) {
+      return new (P || (P = Promise))(function(resolve4, reject) {
         function fulfilled(value) {
           try {
             step(generator.next(value));
@@ -27449,7 +27449,7 @@ var require_test_transport = __commonJS({
         }
         __name(rejected, "rejected");
         function step(result) {
-          result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+          result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
         }
         __name(step, "step");
         step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -27534,8 +27534,8 @@ var require_test_transport = __commonJS({
        * The returned promise resolves when the stream is closed. It should
        * not reject. If it does, code is broken.
        */
-      streamResponses(method, stream3, abort) {
-        return __awaiter22(this, void 0, void 0, function* () {
+      streamResponses(method, stream4, abort) {
+        return __awaiter23(this, void 0, void 0, function* () {
           const messages = [];
           if (this.data.response === void 0) {
             messages.push(method.O.create());
@@ -27551,31 +27551,31 @@ var require_test_transport = __commonJS({
           try {
             yield delay4(this.responseDelay, abort)(void 0);
           } catch (error2) {
-            stream3.notifyError(error2);
+            stream4.notifyError(error2);
             return;
           }
           if (this.data.response instanceof rpc_error_1.RpcError) {
-            stream3.notifyError(this.data.response);
+            stream4.notifyError(this.data.response);
             return;
           }
           for (let msg of messages) {
-            stream3.notifyMessage(msg);
+            stream4.notifyMessage(msg);
             try {
               yield delay4(this.betweenResponseDelay, abort)(void 0);
             } catch (error2) {
-              stream3.notifyError(error2);
+              stream4.notifyError(error2);
               return;
             }
           }
           if (this.data.status instanceof rpc_error_1.RpcError) {
-            stream3.notifyError(this.data.status);
+            stream4.notifyError(this.data.status);
             return;
           }
           if (this.data.trailers instanceof rpc_error_1.RpcError) {
-            stream3.notifyError(this.data.trailers);
+            stream4.notifyError(this.data.trailers);
             return;
           }
-          stream3.notifyComplete();
+          stream4.notifyComplete();
         });
       }
       // Creates a promise for response status from the mock data.
@@ -27650,11 +27650,11 @@ var require_test_transport = __commonJS({
       responseTrailer: "test"
     };
     function delay4(ms, abort) {
-      return (v) => new Promise((resolve3, reject) => {
+      return (v) => new Promise((resolve4, reject) => {
         if (abort === null || abort === void 0 ? void 0 : abort.aborted) {
           reject(new rpc_error_1.RpcError("user cancel", "CANCELLED"));
         } else {
-          const id = setTimeout(() => resolve3(v), ms);
+          const id = setTimeout(() => resolve4(v), ms);
           if (abort) {
             abort.addEventListener("abort", (ev) => {
               clearTimeout(id);
@@ -27952,22 +27952,22 @@ var require_filesystem = __commonJS({
     var LDD_PATH = "/usr/bin/ldd";
     var SELF_PATH = "/proc/self/exe";
     var MAX_LENGTH = 2048;
-    var readFileSync = /* @__PURE__ */ __name((path21) => {
-      const fd = fs14.openSync(path21, "r");
+    var readFileSync = /* @__PURE__ */ __name((path22) => {
+      const fd = fs14.openSync(path22, "r");
       const buffer3 = Buffer.alloc(MAX_LENGTH);
       const bytesRead = fs14.readSync(fd, buffer3, 0, MAX_LENGTH, 0);
       fs14.close(fd, () => {
       });
       return buffer3.subarray(0, bytesRead);
     }, "readFileSync");
-    var readFile4 = /* @__PURE__ */ __name((path21) => new Promise((resolve3, reject) => {
-      fs14.open(path21, "r", (err, fd) => {
+    var readFile3 = /* @__PURE__ */ __name((path22) => new Promise((resolve4, reject) => {
+      fs14.open(path22, "r", (err, fd) => {
         if (err) {
           reject(err);
         } else {
           const buffer3 = Buffer.alloc(MAX_LENGTH);
           fs14.read(fd, buffer3, 0, MAX_LENGTH, 0, (_, bytesRead) => {
-            resolve3(buffer3.subarray(0, bytesRead));
+            resolve4(buffer3.subarray(0, bytesRead));
             fs14.close(fd, () => {
             });
           });
@@ -27978,7 +27978,7 @@ var require_filesystem = __commonJS({
       LDD_PATH,
       SELF_PATH,
       readFileSync,
-      readFile: readFile4
+      readFile: readFile3
     };
   }
 });
@@ -28026,7 +28026,7 @@ var require_detect_libc = __commonJS({
     "use strict";
     var childProcess = require("child_process");
     var { isLinux, getReport } = require_process();
-    var { LDD_PATH, SELF_PATH, readFile: readFile4, readFileSync } = require_filesystem();
+    var { LDD_PATH, SELF_PATH, readFile: readFile3, readFileSync } = require_filesystem();
     var { interpreterPath } = require_elf();
     var cachedFamilyInterpreter;
     var cachedFamilyFilesystem;
@@ -28035,10 +28035,10 @@ var require_detect_libc = __commonJS({
     var commandOut = "";
     var safeCommand = /* @__PURE__ */ __name(() => {
       if (!commandOut) {
-        return new Promise((resolve3) => {
+        return new Promise((resolve4) => {
           childProcess.exec(command, (err, out) => {
             commandOut = err ? " " : out;
-            resolve3(commandOut);
+            resolve4(commandOut);
           });
         });
       }
@@ -28080,11 +28080,11 @@ var require_detect_libc = __commonJS({
       }
       return null;
     }, "familyFromCommand");
-    var familyFromInterpreterPath = /* @__PURE__ */ __name((path21) => {
-      if (path21) {
-        if (path21.includes("/ld-musl-")) {
+    var familyFromInterpreterPath = /* @__PURE__ */ __name((path22) => {
+      if (path22) {
+        if (path22.includes("/ld-musl-")) {
           return MUSL;
-        } else if (path21.includes("/ld-linux-")) {
+        } else if (path22.includes("/ld-linux-")) {
           return GLIBC;
         }
       }
@@ -28106,7 +28106,7 @@ var require_detect_libc = __commonJS({
       }
       cachedFamilyFilesystem = null;
       try {
-        const lddContent = await readFile4(LDD_PATH);
+        const lddContent = await readFile3(LDD_PATH);
         cachedFamilyFilesystem = getFamilyFromLddContent(lddContent);
       } catch (e) {
       }
@@ -28130,9 +28130,9 @@ var require_detect_libc = __commonJS({
       }
       cachedFamilyInterpreter = null;
       try {
-        const selfContent = await readFile4(SELF_PATH);
-        const path21 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path21);
+        const selfContent = await readFile3(SELF_PATH);
+        const path22 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path22);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -28144,8 +28144,8 @@ var require_detect_libc = __commonJS({
       cachedFamilyInterpreter = null;
       try {
         const selfContent = readFileSync(SELF_PATH);
-        const path21 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path21);
+        const path22 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path22);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -28192,7 +28192,7 @@ var require_detect_libc = __commonJS({
       }
       cachedVersionFilesystem = null;
       try {
-        const lddContent = await readFile4(LDD_PATH);
+        const lddContent = await readFile3(LDD_PATH);
         const versionMatch = lddContent.match(RE_GLIBC_VERSION);
         if (versionMatch) {
           cachedVersionFilesystem = versionMatch[1];
@@ -28488,12 +28488,12 @@ var tunnel = __toESM(require_tunnel2(), 1);
 var import_undici = __toESM(require_undici(), 1);
 var __awaiter = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -28511,7 +28511,7 @@ var __awaiter = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -28591,26 +28591,26 @@ var HttpClientResponse = class {
   }
   readBody() {
     return __awaiter(this, void 0, void 0, function* () {
-      return new Promise((resolve3) => __awaiter(this, void 0, void 0, function* () {
+      return new Promise((resolve4) => __awaiter(this, void 0, void 0, function* () {
         let output = Buffer.alloc(0);
         this.message.on("data", (chunk) => {
           output = Buffer.concat([output, chunk]);
         });
         this.message.on("end", () => {
-          resolve3(output.toString());
+          resolve4(output.toString());
         });
       }));
     });
   }
   readBodyBuffer() {
     return __awaiter(this, void 0, void 0, function* () {
-      return new Promise((resolve3) => __awaiter(this, void 0, void 0, function* () {
+      return new Promise((resolve4) => __awaiter(this, void 0, void 0, function* () {
         const chunks = [];
         this.message.on("data", (chunk) => {
           chunks.push(chunk);
         });
         this.message.on("end", () => {
-          resolve3(Buffer.concat(chunks));
+          resolve4(Buffer.concat(chunks));
         });
       }));
     });
@@ -28692,9 +28692,9 @@ var HttpClient = class {
       return this.request("HEAD", requestUrl, null, additionalHeaders || {});
     });
   }
-  sendStream(verb, requestUrl, stream3, additionalHeaders) {
+  sendStream(verb, requestUrl, stream4, additionalHeaders) {
     return __awaiter(this, void 0, void 0, function* () {
-      return this.request(verb, requestUrl, stream3, additionalHeaders);
+      return this.request(verb, requestUrl, stream4, additionalHeaders);
     });
   }
   /**
@@ -28816,14 +28816,14 @@ var HttpClient = class {
    */
   requestRaw(info2, data) {
     return __awaiter(this, void 0, void 0, function* () {
-      return new Promise((resolve3, reject) => {
+      return new Promise((resolve4, reject) => {
         function callbackForResult(err, res) {
           if (err) {
             reject(err);
           } else if (!res) {
             reject(new Error("Unknown error"));
           } else {
-            resolve3(res);
+            resolve4(res);
           }
         }
         __name(callbackForResult, "callbackForResult");
@@ -29069,12 +29069,12 @@ var HttpClient = class {
     return __awaiter(this, void 0, void 0, function* () {
       retryNumber = Math.min(ExponentialBackoffCeiling, retryNumber);
       const ms = ExponentialBackoffTimeSlice * Math.pow(2, retryNumber);
-      return new Promise((resolve3) => setTimeout(() => resolve3(), ms));
+      return new Promise((resolve4) => setTimeout(() => resolve4(), ms));
     });
   }
   _processResponse(res, options) {
     return __awaiter(this, void 0, void 0, function* () {
-      return new Promise((resolve3, reject) => __awaiter(this, void 0, void 0, function* () {
+      return new Promise((resolve4, reject) => __awaiter(this, void 0, void 0, function* () {
         const statusCode = res.message.statusCode || 0;
         const response = {
           statusCode,
@@ -29082,7 +29082,7 @@ var HttpClient = class {
           headers: {}
         };
         if (statusCode === HttpCodes.NotFound) {
-          resolve3(response);
+          resolve4(response);
         }
         function dateTimeDeserializer(key, value) {
           if (typeof value === "string") {
@@ -29122,7 +29122,7 @@ var HttpClient = class {
           err.result = response.result;
           reject(err);
         } else {
-          resolve3(response);
+          resolve4(response);
         }
       }));
     });
@@ -29133,12 +29133,12 @@ var lowercaseKeys = /* @__PURE__ */ __name((obj) => Object.keys(obj).reduce((c, 
 // node_modules/@actions/http-client/lib/auth.js
 var __awaiter2 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -29156,7 +29156,7 @@ var __awaiter2 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -29193,12 +29193,12 @@ var import_os = require("os");
 var import_fs = require("fs");
 var __awaiter3 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -29216,7 +29216,7 @@ var __awaiter3 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -29497,12 +29497,12 @@ var fs2 = __toESM(require("fs"), 1);
 var path = __toESM(require("path"), 1);
 var __awaiter4 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -29520,7 +29520,7 @@ var __awaiter4 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -29640,12 +29640,12 @@ __name(isUnixExecutable, "isUnixExecutable");
 // node_modules/@actions/io/lib/io.js
 var __awaiter5 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -29663,7 +29663,7 @@ var __awaiter5 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -29842,12 +29842,12 @@ __name(copyFile2, "copyFile");
 var import_timers = require("timers");
 var __awaiter6 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -29865,7 +29865,7 @@ var __awaiter6 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -30088,7 +30088,7 @@ var ToolRunner = class extends events.EventEmitter {
         this.toolPath = path3.resolve(process.cwd(), this.options.cwd || process.cwd(), this.toolPath);
       }
       this.toolPath = yield which(this.toolPath, true);
-      return new Promise((resolve3, reject) => __awaiter6(this, void 0, void 0, function* () {
+      return new Promise((resolve4, reject) => __awaiter6(this, void 0, void 0, function* () {
         this._debug(`exec tool: ${this.toolPath}`);
         this._debug("arguments:");
         for (const arg of this.args) {
@@ -30171,7 +30171,7 @@ var ToolRunner = class extends events.EventEmitter {
           if (error2) {
             reject(error2);
           } else {
-            resolve3(exitCode);
+            resolve4(exitCode);
           }
         });
         if (this.options.input) {
@@ -30299,12 +30299,12 @@ var ExecState = class _ExecState extends events.EventEmitter {
 // node_modules/@actions/exec/lib/exec.js
 var __awaiter7 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -30322,7 +30322,7 @@ var __awaiter7 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -30445,9 +30445,7 @@ function getState(name) {
 __name(getState, "getState");
 
 // src/cache.ts
-var crypto4 = __toESM(require("node:crypto"), 1);
-var fs10 = __toESM(require("node:fs/promises"), 1);
-var path18 = __toESM(require("node:path"), 1);
+var path19 = __toESM(require("node:path"), 1);
 
 // node_modules/@actions/cache/lib/cache.js
 var path11 = __toESM(require("path"), 1);
@@ -30891,8 +30889,8 @@ var SearchState = class {
   static {
     __name(this, "SearchState");
   }
-  constructor(path21, level) {
-    this.path = path21;
+  constructor(path22, level) {
+    this.path = path22;
     this.level = level;
   }
 };
@@ -30900,12 +30898,12 @@ var SearchState = class {
 // node_modules/@actions/cache/node_modules/@actions/glob/lib/internal-globber.js
 var __awaiter8 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -30923,7 +30921,7 @@ var __awaiter8 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -30937,15 +30935,15 @@ var __asyncValues = function(o) {
   }, i);
   function verb(n) {
     i[n] = o[n] && function(v) {
-      return new Promise(function(resolve3, reject) {
-        v = o[n](v), settle(resolve3, reject, v.done, v.value);
+      return new Promise(function(resolve4, reject) {
+        v = o[n](v), settle(resolve4, reject, v.done, v.value);
       });
     };
   }
   __name(verb, "verb");
-  function settle(resolve3, reject, d, v) {
+  function settle(resolve4, reject, d, v) {
     Promise.resolve(v).then(function(v2) {
-      resolve3({ value: v2, done: d });
+      resolve4({ value: v2, done: d });
     }, reject);
   }
   __name(settle, "settle");
@@ -31153,12 +31151,12 @@ var DefaultGlobber = class _DefaultGlobber {
 // node_modules/@actions/cache/node_modules/@actions/glob/lib/glob.js
 var __awaiter9 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -31176,7 +31174,7 @@ var __awaiter9 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -31225,12 +31223,12 @@ var CacheFileSizeLimit = 10 * Math.pow(1024, 3);
 // node_modules/@actions/cache/lib/internal/cacheUtils.js
 var __awaiter10 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -31248,7 +31246,7 @@ var __awaiter10 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -31262,15 +31260,15 @@ var __asyncValues2 = function(o) {
   }, i);
   function verb(n) {
     i[n] = o[n] && function(v) {
-      return new Promise(function(resolve3, reject) {
-        v = o[n](v), settle(resolve3, reject, v.done, v.value);
+      return new Promise(function(resolve4, reject) {
+        v = o[n](v), settle(resolve4, reject, v.done, v.value);
       });
     };
   }
   __name(verb, "verb");
-  function settle(resolve3, reject, d, v) {
+  function settle(resolve4, reject, d, v) {
     Promise.resolve(v).then(function(v2) {
-      resolve3({ value: v2, done: d });
+      resolve4({ value: v2, done: d });
     }, reject);
   }
   __name(settle, "settle");
@@ -31898,12 +31896,12 @@ var HttpPipeline = class _HttpPipeline {
   }
   sendRequest(httpClient, request) {
     const policies = this.getOrderedPolicies();
-    const pipeline3 = policies.reduceRight((next, policy) => {
+    const pipeline4 = policies.reduceRight((next, policy) => {
       return (req) => {
         return policy.sendRequest(req, next);
       };
     }, (req) => httpClient.sendRequest(req));
-    return pipeline3(request);
+    return pipeline4(request);
   }
   getOrderedPolicies() {
     if (!this._orderedPolicies) {
@@ -32297,20 +32295,20 @@ function isReadableStream(body2) {
   return body2 && typeof body2.pipe === "function";
 }
 __name(isReadableStream, "isReadableStream");
-function isStreamComplete(stream3) {
-  if (stream3.readable === false) {
+function isStreamComplete(stream4) {
+  if (stream4.readable === false) {
     return Promise.resolve();
   }
-  return new Promise((resolve3) => {
+  return new Promise((resolve4) => {
     const handler = /* @__PURE__ */ __name(() => {
-      resolve3();
-      stream3.removeListener("close", handler);
-      stream3.removeListener("end", handler);
-      stream3.removeListener("error", handler);
+      resolve4();
+      stream4.removeListener("close", handler);
+      stream4.removeListener("end", handler);
+      stream4.removeListener("error", handler);
     }, "handler");
-    stream3.on("close", handler);
-    stream3.on("end", handler);
-    stream3.on("error", handler);
+    stream4.on("close", handler);
+    stream4.on("end", handler);
+    stream4.on("error", handler);
   });
 }
 __name(isStreamComplete, "isStreamComplete");
@@ -32466,8 +32464,8 @@ var NodeHttpClient = class {
       headers: request.headers.toJSON({ preserveCase: true }),
       ...request.requestOverrides
     };
-    return new Promise((resolve3, reject) => {
-      const req = isInsecure ? import_node_http.default.request(options, resolve3) : import_node_https.default.request(options, resolve3);
+    return new Promise((resolve4, reject) => {
+      const req = isInsecure ? import_node_http.default.request(options, resolve4) : import_node_https.default.request(options, resolve4);
       req.once("error", (err) => {
         reject(new RestError(err.message, { code: err.code ?? RestError.REQUEST_SEND_ERROR, request }));
       });
@@ -32538,34 +32536,34 @@ function getResponseHeaders(res) {
   return headers;
 }
 __name(getResponseHeaders, "getResponseHeaders");
-function getDecodedResponseStream(stream3, headers) {
+function getDecodedResponseStream(stream4, headers) {
   const contentEncoding = headers.get("Content-Encoding");
   if (contentEncoding === "gzip") {
     const unzip = import_node_zlib.default.createGunzip();
-    stream3.pipe(unzip);
+    stream4.pipe(unzip);
     return unzip;
   } else if (contentEncoding === "deflate") {
     const inflate = import_node_zlib.default.createInflate();
-    stream3.pipe(inflate);
+    stream4.pipe(inflate);
     return inflate;
   }
-  return stream3;
+  return stream4;
 }
 __name(getDecodedResponseStream, "getDecodedResponseStream");
-function streamToText(stream3) {
-  return new Promise((resolve3, reject) => {
+function streamToText(stream4) {
+  return new Promise((resolve4, reject) => {
     const buffer3 = [];
-    stream3.on("data", (chunk) => {
+    stream4.on("data", (chunk) => {
       if (Buffer.isBuffer(chunk)) {
         buffer3.push(chunk);
       } else {
         buffer3.push(Buffer.from(chunk));
       }
     });
-    stream3.on("end", () => {
-      resolve3(Buffer.concat(buffer3).toString("utf8"));
+    stream4.on("end", () => {
+      resolve4(Buffer.concat(buffer3).toString("utf8"));
     });
-    stream3.on("error", (e) => {
+    stream4.on("error", (e) => {
       if (e && e?.name === "AbortError") {
         reject(e);
       } else {
@@ -32722,7 +32720,7 @@ __name(calculateRetryDelay, "calculateRetryDelay");
 // node_modules/@typespec/ts-http-runtime/dist/esm/util/helpers.js
 var StandardAbortMessage = "The operation was aborted.";
 function delay(delayInMs, value, options) {
-  return new Promise((resolve3, reject) => {
+  return new Promise((resolve4, reject) => {
     let timer = void 0;
     let onAborted = void 0;
     const rejectOnAbort = /* @__PURE__ */ __name(() => {
@@ -32745,7 +32743,7 @@ function delay(delayInMs, value, options) {
     }
     timer = setTimeout(() => {
       removeListeners();
-      resolve3(value);
+      resolve4(value);
     }, delayInMs);
     if (options?.abortSignal) {
       options.abortSignal.addEventListener("abort", onAborted);
@@ -33246,12 +33244,12 @@ function makeAsyncIterable(webStream) {
   }
 }
 __name(makeAsyncIterable, "makeAsyncIterable");
-function ensureNodeStream(stream3) {
-  if (stream3 instanceof ReadableStream) {
-    makeAsyncIterable(stream3);
-    return import_stream.Readable.fromWeb(stream3);
+function ensureNodeStream(stream4) {
+  if (stream4 instanceof ReadableStream) {
+    makeAsyncIterable(stream4);
+    return import_stream.Readable.fromWeb(stream4);
   } else {
-    return stream3;
+    return stream4;
   }
 }
 __name(ensureNodeStream, "ensureNodeStream");
@@ -33269,8 +33267,8 @@ async function concat(sources) {
   return function() {
     const streams = sources.map((x) => typeof x === "function" ? x() : x).map(toStream);
     return import_stream.Readable.from((async function* () {
-      for (const stream3 of streams) {
-        for await (const chunk of stream3) {
+      for (const stream4 of streams) {
+        for await (const chunk of stream4) {
           yield chunk;
         }
       }
@@ -33499,7 +33497,7 @@ var AbortError2 = class extends Error {
 // node_modules/@azure/core-util/dist/esm/createAbortablePromise.js
 function createAbortablePromise(buildPromise, options) {
   const { cleanupBeforeAbort, abortSignal, abortErrorMsg } = options ?? {};
-  return new Promise((resolve3, reject) => {
+  return new Promise((resolve4, reject) => {
     function rejectOnAbort() {
       reject(new AbortError2(abortErrorMsg ?? "The operation was aborted."));
     }
@@ -33520,7 +33518,7 @@ function createAbortablePromise(buildPromise, options) {
     try {
       buildPromise((x) => {
         removeListeners();
-        resolve3(x);
+        resolve4(x);
       }, (x) => {
         removeListeners();
         reject(x);
@@ -33538,8 +33536,8 @@ var StandardAbortMessage2 = "The delay was aborted.";
 function delay2(timeInMs, options) {
   let token;
   const { abortSignal, abortErrorMsg } = options ?? {};
-  return createAbortablePromise((resolve3) => {
-    token = setTimeout(resolve3, timeInMs);
+  return createAbortablePromise((resolve4) => {
+    token = setTimeout(resolve4, timeInMs);
   }, {
     cleanupBeforeAbort: /* @__PURE__ */ __name(() => clearTimeout(token), "cleanupBeforeAbort"),
     abortSignal,
@@ -33984,31 +33982,31 @@ __name(wrapAbortSignalLikePolicy, "wrapAbortSignalLikePolicy");
 
 // node_modules/@azure/core-rest-pipeline/dist/esm/createPipelineFromOptions.js
 function createPipelineFromOptions2(options) {
-  const pipeline3 = createEmptyPipeline2();
+  const pipeline4 = createEmptyPipeline2();
   if (isNodeLike2) {
     if (options.agent) {
-      pipeline3.addPolicy(agentPolicy2(options.agent));
+      pipeline4.addPolicy(agentPolicy2(options.agent));
     }
     if (options.tlsOptions) {
-      pipeline3.addPolicy(tlsPolicy2(options.tlsOptions));
+      pipeline4.addPolicy(tlsPolicy2(options.tlsOptions));
     }
-    pipeline3.addPolicy(proxyPolicy2(options.proxyOptions));
-    pipeline3.addPolicy(decompressResponsePolicy2());
+    pipeline4.addPolicy(proxyPolicy2(options.proxyOptions));
+    pipeline4.addPolicy(decompressResponsePolicy2());
   }
-  pipeline3.addPolicy(wrapAbortSignalLikePolicy());
-  pipeline3.addPolicy(formDataPolicy2(), { beforePolicies: [multipartPolicyName2] });
-  pipeline3.addPolicy(userAgentPolicy2(options.userAgentOptions));
-  pipeline3.addPolicy(setClientRequestIdPolicy(options.telemetryOptions?.clientRequestIdHeaderName));
-  pipeline3.addPolicy(multipartPolicy2(), { afterPhase: "Deserialize" });
-  pipeline3.addPolicy(defaultRetryPolicy2(options.retryOptions), { phase: "Retry" });
-  pipeline3.addPolicy(tracingPolicy({ ...options.userAgentOptions, ...options.loggingOptions }), {
+  pipeline4.addPolicy(wrapAbortSignalLikePolicy());
+  pipeline4.addPolicy(formDataPolicy2(), { beforePolicies: [multipartPolicyName2] });
+  pipeline4.addPolicy(userAgentPolicy2(options.userAgentOptions));
+  pipeline4.addPolicy(setClientRequestIdPolicy(options.telemetryOptions?.clientRequestIdHeaderName));
+  pipeline4.addPolicy(multipartPolicy2(), { afterPhase: "Deserialize" });
+  pipeline4.addPolicy(defaultRetryPolicy2(options.retryOptions), { phase: "Retry" });
+  pipeline4.addPolicy(tracingPolicy({ ...options.userAgentOptions, ...options.loggingOptions }), {
     afterPhase: "Retry"
   });
   if (isNodeLike2) {
-    pipeline3.addPolicy(redirectPolicy2(options.redirectOptions), { afterPhase: "Retry" });
+    pipeline4.addPolicy(redirectPolicy2(options.redirectOptions), { afterPhase: "Retry" });
   }
-  pipeline3.addPolicy(logPolicy2(options.loggingOptions), { afterPhase: "Sign" });
-  return pipeline3;
+  pipeline4.addPolicy(logPolicy2(options.loggingOptions), { afterPhase: "Sign" });
+  return pipeline4;
 }
 __name(createPipelineFromOptions2, "createPipelineFromOptions");
 
@@ -34349,8 +34347,8 @@ function createDisableKeepAlivePolicy() {
   };
 }
 __name(createDisableKeepAlivePolicy, "createDisableKeepAlivePolicy");
-function pipelineContainsDisableKeepAlivePolicy(pipeline3) {
-  return pipeline3.getOrderedPolicies().some((policy) => policy.name === disableKeepAlivePolicyName);
+function pipelineContainsDisableKeepAlivePolicy(pipeline4) {
+  return pipeline4.getOrderedPolicies().some((policy) => policy.name === disableKeepAlivePolicyName);
 }
 __name(pipelineContainsDisableKeepAlivePolicy, "pipelineContainsDisableKeepAlivePolicy");
 
@@ -35638,18 +35636,18 @@ __name(prepareXMLRootList, "prepareXMLRootList");
 
 // node_modules/@azure/core-client/dist/esm/pipeline.js
 function createClientPipeline(options = {}) {
-  const pipeline3 = createPipelineFromOptions2(options ?? {});
+  const pipeline4 = createPipelineFromOptions2(options ?? {});
   if (options.credentialOptions) {
-    pipeline3.addPolicy(bearerTokenAuthenticationPolicy({
+    pipeline4.addPolicy(bearerTokenAuthenticationPolicy({
       credential: options.credentialOptions.credential,
       scopes: options.credentialOptions.credentialScopes
     }));
   }
-  pipeline3.addPolicy(serializationPolicy(options.serializationOptions), { phase: "Serialize" });
-  pipeline3.addPolicy(deserializationPolicy(options.deserializationOptions), {
+  pipeline4.addPolicy(serializationPolicy(options.serializationOptions), { phase: "Serialize" });
+  pipeline4.addPolicy(deserializationPolicy(options.deserializationOptions), {
     phase: "Deserialize"
   });
-  return pipeline3;
+  return pipeline4;
 }
 __name(createClientPipeline, "createClientPipeline");
 
@@ -35676,15 +35674,15 @@ function getRequestUrl(baseUri, operationSpec, operationArguments, fallbackObjec
   let isAbsolutePath = false;
   let requestUrl = replaceAll(baseUri, urlReplacements);
   if (operationSpec.path) {
-    let path21 = replaceAll(operationSpec.path, urlReplacements);
-    if (operationSpec.path === "/{nextLink}" && path21.startsWith("/")) {
-      path21 = path21.substring(1);
+    let path22 = replaceAll(operationSpec.path, urlReplacements);
+    if (operationSpec.path === "/{nextLink}" && path22.startsWith("/")) {
+      path22 = path22.substring(1);
     }
-    if (isAbsoluteUrl(path21)) {
-      requestUrl = path21;
+    if (isAbsoluteUrl(path22)) {
+      requestUrl = path22;
       isAbsolutePath = true;
     } else {
-      requestUrl = appendPath(requestUrl, path21);
+      requestUrl = appendPath(requestUrl, path22);
     }
   }
   const { queryParams, sequenceParams } = calculateQueryParameters(operationSpec, operationArguments, fallbackObject);
@@ -35734,9 +35732,9 @@ function appendPath(url2, pathToAppend) {
   }
   const searchStart = pathToAppend.indexOf("?");
   if (searchStart !== -1) {
-    const path21 = pathToAppend.substring(0, searchStart);
+    const path22 = pathToAppend.substring(0, searchStart);
     const search = pathToAppend.substring(searchStart + 1);
-    newPath = newPath + path21;
+    newPath = newPath + path22;
     if (search) {
       parsedUrl.search = parsedUrl.search ? `${parsedUrl.search}&${search}` : search;
     }
@@ -37774,13 +37772,13 @@ var Matcher = class {
    * @returns {string}
    */
   toString(separator, includeNamespace = true) {
-    const sep12 = separator || this.separator;
+    const sep13 = separator || this.separator;
     return this.path.map((n) => {
       if (includeNamespace && n.namespace) {
         return `${n.namespace}:${n.tag}`;
       }
       return n.tag;
-    }).join(sep12);
+    }).join(sep13);
   }
   /**
    * Get path as array of tag names
@@ -39804,7 +39802,7 @@ var BufferScheduler = class {
    *
    */
   async do() {
-    return new Promise((resolve3, reject) => {
+    return new Promise((resolve4, reject) => {
       this.readable.on("data", (data) => {
         data = typeof data === "string" ? Buffer.from(data, this.encoding) : data;
         this.appendUnresolvedData(data);
@@ -39832,11 +39830,11 @@ var BufferScheduler = class {
         if (this.isStreamEnd && this.executingOutgoingHandlers === 0) {
           if (this.unresolvedLength > 0 && this.unresolvedLength < this.bufferSize) {
             const buffer3 = this.shiftBufferFromUnresolvedDataArray();
-            this.outgoingHandler(() => buffer3.getReadableStream(), buffer3.size, this.offset).then(resolve3).catch(reject);
+            this.outgoingHandler(() => buffer3.getReadableStream(), buffer3.size, this.offset).then(resolve4).catch(reject);
           } else if (this.unresolvedLength >= this.bufferSize) {
             return;
           } else {
-            resolve3();
+            resolve4();
           }
         }
       });
@@ -40082,7 +40080,7 @@ function getURLQueries(url2) {
 }
 __name(getURLQueries, "getURLQueries");
 async function delay3(timeInMs, aborter, abortError) {
-  return new Promise((resolve3, reject) => {
+  return new Promise((resolve4, reject) => {
     let timeout;
     const abortHandler = /* @__PURE__ */ __name(() => {
       if (timeout !== void 0) {
@@ -40094,7 +40092,7 @@ async function delay3(timeInMs, aborter, abortError) {
       if (aborter !== void 0) {
         aborter.removeEventListener("abort", abortHandler);
       }
-      resolve3();
+      resolve4();
     }, "resolveHandler");
     timeout = setTimeout(resolveHandler, timeInMs);
     if (aborter !== void 0) {
@@ -40759,9 +40757,9 @@ var StorageSharedKeyCredentialPolicy = class extends CredentialPolicy {
    * @param request -
    */
   getCanonicalizedResourceString(request) {
-    const path21 = getURLPath(request.url) || "/";
+    const path22 = getURLPath(request.url) || "/";
     let canonicalizedResourceString = "";
-    canonicalizedResourceString += `/${this.factory.accountName}${path21}`;
+    canonicalizedResourceString += `/${this.factory.accountName}${path22}`;
     const queries = getURLQueries(request.url);
     const lowercaseQueries = {};
     if (queries) {
@@ -41280,9 +41278,9 @@ function storageSharedKeyCredentialPolicy(options) {
   }
   __name(getCanonicalizedHeadersString, "getCanonicalizedHeadersString");
   function getCanonicalizedResourceString(request) {
-    const path21 = getURLPath(request.url) || "/";
+    const path22 = getURLPath(request.url) || "/";
     let canonicalizedResourceString = "";
-    canonicalizedResourceString += `/${options.accountName}${path21}`;
+    canonicalizedResourceString += `/${options.accountName}${path22}`;
     const queries = getURLQueries(request.url);
     const lowercaseQueries = {};
     if (queries) {
@@ -41558,11 +41556,11 @@ var PathStylePorts2 = [
 ];
 
 // node_modules/@azure/storage-blob/dist/esm/Pipeline.js
-function isPipelineLike(pipeline3) {
-  if (!pipeline3 || typeof pipeline3 !== "object") {
+function isPipelineLike(pipeline4) {
+  if (!pipeline4 || typeof pipeline4 !== "object") {
     return false;
   }
-  const castPipeline = pipeline3;
+  const castPipeline = pipeline4;
   return Array.isArray(castPipeline.factories) && typeof castPipeline.options === "object" && typeof castPipeline.toServiceClientOptions === "function";
 }
 __name(isPipelineLike, "isPipelineLike");
@@ -41605,12 +41603,12 @@ function newPipeline(credential, pipelineOptions = {}) {
   if (!credential) {
     credential = new AnonymousCredential();
   }
-  const pipeline3 = new Pipeline([], pipelineOptions);
-  pipeline3._credential = credential;
-  return pipeline3;
+  const pipeline4 = new Pipeline([], pipelineOptions);
+  pipeline4._credential = credential;
+  return pipeline4;
 }
 __name(newPipeline, "newPipeline");
-function processDownlevelPipeline(pipeline3) {
+function processDownlevelPipeline(pipeline4) {
   const knownFactoryFunctions = [
     isAnonymousCredential,
     isStorageSharedKeyCredential,
@@ -41620,8 +41618,8 @@ function processDownlevelPipeline(pipeline3) {
     isStorageTelemetryPolicyFactory,
     isCoreHttpPolicyFactory
   ];
-  if (pipeline3.factories.length) {
-    const novelFactories = pipeline3.factories.filter((factory) => {
+  if (pipeline4.factories.length) {
+    const novelFactories = pipeline4.factories.filter((factory) => {
       return !knownFactoryFunctions.some((knownFactory) => knownFactory(factory));
     });
     if (novelFactories.length) {
@@ -41635,14 +41633,14 @@ function processDownlevelPipeline(pipeline3) {
   return void 0;
 }
 __name(processDownlevelPipeline, "processDownlevelPipeline");
-function getCoreClientOptions(pipeline3) {
-  const { httpClient: v1Client, ...restOptions } = pipeline3.options;
-  let httpClient = pipeline3._coreHttpClient;
+function getCoreClientOptions(pipeline4) {
+  const { httpClient: v1Client, ...restOptions } = pipeline4.options;
+  let httpClient = pipeline4._coreHttpClient;
   if (!httpClient) {
     httpClient = v1Client ? convertHttpClient(v1Client) : getCachedDefaultHttpClient2();
-    pipeline3._coreHttpClient = httpClient;
+    pipeline4._coreHttpClient = httpClient;
   }
-  let corePipeline = pipeline3._corePipeline;
+  let corePipeline = pipeline4._corePipeline;
   if (!corePipeline) {
     const packageDetails = `azsdk-js-azure-storage-blob/${SDK_VERSION3}`;
     const userAgentPrefix = restOptions.userAgentOptions && restOptions.userAgentOptions.userAgentPrefix ? `${restOptions.userAgentOptions.userAgentPrefix} ${packageDetails}` : `${packageDetails}`;
@@ -41683,11 +41681,11 @@ function getCoreClientOptions(pipeline3) {
     corePipeline.addPolicy(storageRetryPolicy(restOptions.retryOptions), { phase: "Retry" });
     corePipeline.addPolicy(storageRequestFailureDetailsParserPolicy());
     corePipeline.addPolicy(storageBrowserPolicy());
-    const downlevelResults = processDownlevelPipeline(pipeline3);
+    const downlevelResults = processDownlevelPipeline(pipeline4);
     if (downlevelResults) {
       corePipeline.addPolicy(downlevelResults.wrappedPolicies, downlevelResults.afterRetry ? { afterPhase: "Retry" } : void 0);
     }
-    const credential = getCredentialFromPipeline(pipeline3);
+    const credential = getCredentialFromPipeline(pipeline4);
     if (isTokenCredential(credential)) {
       corePipeline.addPolicy(bearerTokenAuthenticationPolicy({
         credential,
@@ -41700,7 +41698,7 @@ function getCoreClientOptions(pipeline3) {
         accountKey: credential.accountKey
       }), { phase: "Sign" });
     }
-    pipeline3._corePipeline = corePipeline;
+    pipeline4._corePipeline = corePipeline;
   }
   return {
     ...restOptions,
@@ -41710,12 +41708,12 @@ function getCoreClientOptions(pipeline3) {
   };
 }
 __name(getCoreClientOptions, "getCoreClientOptions");
-function getCredentialFromPipeline(pipeline3) {
-  if (pipeline3._credential) {
-    return pipeline3._credential;
+function getCredentialFromPipeline(pipeline4) {
+  if (pipeline4._credential) {
+    return pipeline4._credential;
   }
   let credential = new AnonymousCredential();
-  for (const factory of pipeline3.factories) {
+  for (const factory of pipeline4.factories) {
     if (isTokenCredential(factory.credential)) {
       credential = factory.credential;
     } else if (isStorageSharedKeyCredential(factory)) {
@@ -55269,10 +55267,10 @@ var StorageContextClient = class extends StorageClient {
 // node_modules/@azure/storage-blob/dist/esm/utils/utils.common.js
 function escapeURLPath(url2) {
   const urlParsed = new URL(url2);
-  let path21 = urlParsed.pathname;
-  path21 = path21 || "/";
-  path21 = escape(path21);
-  urlParsed.pathname = path21;
+  let path22 = urlParsed.pathname;
+  path22 = path22 || "/";
+  path22 = escape(path22);
+  urlParsed.pathname = path22;
   return urlParsed.toString();
 }
 __name(escapeURLPath, "escapeURLPath");
@@ -55362,9 +55360,9 @@ function escape(text) {
 __name(escape, "escape");
 function appendToURLPath(url2, name) {
   const urlParsed = new URL(url2);
-  let path21 = urlParsed.pathname;
-  path21 = path21 ? path21.endsWith("/") ? `${path21}${name}` : `${path21}/${name}` : name;
-  urlParsed.pathname = path21;
+  let path22 = urlParsed.pathname;
+  path22 = path22 ? path22.endsWith("/") ? `${path22}${name}` : `${path22}/${name}` : name;
+  urlParsed.pathname = path22;
   return urlParsed.toString();
 }
 __name(appendToURLPath, "appendToURLPath");
@@ -55686,13 +55684,13 @@ var StorageClient2 = class {
    * @param url - url to resource
    * @param pipeline - request policy pipeline.
    */
-  constructor(url2, pipeline3) {
+  constructor(url2, pipeline4) {
     this.url = escapeURLPath(url2);
     this.accountName = getAccountNameFromUrl(url2);
-    this.pipeline = pipeline3;
-    this.storageClientContext = new StorageContextClient(this.url, getCoreClientOptions(pipeline3));
+    this.pipeline = pipeline4;
+    this.storageClientContext = new StorageContextClient(this.url, getCoreClientOptions(pipeline4));
     this.isHttps = iEqual(getURLScheme(this.url) || "", "https");
-    this.credential = getCredentialFromPipeline(pipeline3);
+    this.credential = getCredentialFromPipeline(pipeline4);
     const storageClientContext = this.storageClientContext;
     storageClientContext.requestContentType = void 0;
   }
@@ -57695,8 +57693,8 @@ var AvroParser = class _AvroParser {
    * @param length -
    * @param options -
    */
-  static async readFixedBytes(stream3, length, options = {}) {
-    const bytes = await stream3.read(length, { abortSignal: options.abortSignal });
+  static async readFixedBytes(stream4, length, options = {}) {
+    const bytes = await stream4.read(length, { abortSignal: options.abortSignal });
     if (bytes.length !== length) {
       throw new Error("Hit stream end.");
     }
@@ -57708,19 +57706,19 @@ var AvroParser = class _AvroParser {
    * @param stream -
    * @param options -
    */
-  static async readByte(stream3, options = {}) {
-    const buf = await _AvroParser.readFixedBytes(stream3, 1, options);
+  static async readByte(stream4, options = {}) {
+    const buf = await _AvroParser.readFixedBytes(stream4, 1, options);
     return buf[0];
   }
   // int and long are stored in variable-length zig-zag coding.
   // variable-length: https://lucene.apache.org/core/3_5_0/fileformats.html#VInt
   // zig-zag: https://developers.google.com/protocol-buffers/docs/encoding?csw=1#types
-  static async readZigZagLong(stream3, options = {}) {
+  static async readZigZagLong(stream4, options = {}) {
     let zigZagEncoded = 0;
     let significanceInBit = 0;
     let byte, haveMoreByte, significanceInFloat;
     do {
-      byte = await _AvroParser.readByte(stream3, options);
+      byte = await _AvroParser.readByte(stream4, options);
       haveMoreByte = byte & 128;
       zigZagEncoded |= (byte & 127) << significanceInBit;
       significanceInBit += 7;
@@ -57729,7 +57727,7 @@ var AvroParser = class _AvroParser {
       zigZagEncoded = zigZagEncoded;
       significanceInFloat = 268435456;
       do {
-        byte = await _AvroParser.readByte(stream3, options);
+        byte = await _AvroParser.readByte(stream4, options);
         zigZagEncoded += (byte & 127) * significanceInFloat;
         significanceInFloat *= 128;
       } while (byte & 128);
@@ -57741,17 +57739,17 @@ var AvroParser = class _AvroParser {
     }
     return zigZagEncoded >> 1 ^ -(zigZagEncoded & 1);
   }
-  static async readLong(stream3, options = {}) {
-    return _AvroParser.readZigZagLong(stream3, options);
+  static async readLong(stream4, options = {}) {
+    return _AvroParser.readZigZagLong(stream4, options);
   }
-  static async readInt(stream3, options = {}) {
-    return _AvroParser.readZigZagLong(stream3, options);
+  static async readInt(stream4, options = {}) {
+    return _AvroParser.readZigZagLong(stream4, options);
   }
   static async readNull() {
     return null;
   }
-  static async readBoolean(stream3, options = {}) {
-    const b = await _AvroParser.readByte(stream3, options);
+  static async readBoolean(stream4, options = {}) {
+    const b = await _AvroParser.readByte(stream4, options);
     if (b === 1) {
       return true;
     } else if (b === 0) {
@@ -57760,53 +57758,53 @@ var AvroParser = class _AvroParser {
       throw new Error("Byte was not a boolean.");
     }
   }
-  static async readFloat(stream3, options = {}) {
-    const u8arr = await _AvroParser.readFixedBytes(stream3, 4, options);
+  static async readFloat(stream4, options = {}) {
+    const u8arr = await _AvroParser.readFixedBytes(stream4, 4, options);
     const view = new DataView(u8arr.buffer, u8arr.byteOffset, u8arr.byteLength);
     return view.getFloat32(0, true);
   }
-  static async readDouble(stream3, options = {}) {
-    const u8arr = await _AvroParser.readFixedBytes(stream3, 8, options);
+  static async readDouble(stream4, options = {}) {
+    const u8arr = await _AvroParser.readFixedBytes(stream4, 8, options);
     const view = new DataView(u8arr.buffer, u8arr.byteOffset, u8arr.byteLength);
     return view.getFloat64(0, true);
   }
-  static async readBytes(stream3, options = {}) {
-    const size = await _AvroParser.readLong(stream3, options);
+  static async readBytes(stream4, options = {}) {
+    const size = await _AvroParser.readLong(stream4, options);
     if (size < 0) {
       throw new Error("Bytes size was negative.");
     }
-    return stream3.read(size, { abortSignal: options.abortSignal });
+    return stream4.read(size, { abortSignal: options.abortSignal });
   }
-  static async readString(stream3, options = {}) {
-    const u8arr = await _AvroParser.readBytes(stream3, options);
+  static async readString(stream4, options = {}) {
+    const u8arr = await _AvroParser.readBytes(stream4, options);
     const utf8decoder = new TextDecoder();
     return utf8decoder.decode(u8arr);
   }
-  static async readMapPair(stream3, readItemMethod, options = {}) {
-    const key = await _AvroParser.readString(stream3, options);
-    const value = await readItemMethod(stream3, options);
+  static async readMapPair(stream4, readItemMethod, options = {}) {
+    const key = await _AvroParser.readString(stream4, options);
+    const value = await readItemMethod(stream4, options);
     return { key, value };
   }
-  static async readMap(stream3, readItemMethod, options = {}) {
+  static async readMap(stream4, readItemMethod, options = {}) {
     const readPairMethod = /* @__PURE__ */ __name((s, opts = {}) => {
       return _AvroParser.readMapPair(s, readItemMethod, opts);
     }, "readPairMethod");
-    const pairs = await _AvroParser.readArray(stream3, readPairMethod, options);
+    const pairs = await _AvroParser.readArray(stream4, readPairMethod, options);
     const dict = {};
     for (const pair of pairs) {
       dict[pair.key] = pair.value;
     }
     return dict;
   }
-  static async readArray(stream3, readItemMethod, options = {}) {
+  static async readArray(stream4, readItemMethod, options = {}) {
     const items = [];
-    for (let count = await _AvroParser.readLong(stream3, options); count !== 0; count = await _AvroParser.readLong(stream3, options)) {
+    for (let count = await _AvroParser.readLong(stream4, options); count !== 0; count = await _AvroParser.readLong(stream4, options)) {
       if (count < 0) {
-        await _AvroParser.readLong(stream3, options);
+        await _AvroParser.readLong(stream4, options);
         count = -count;
       }
       while (count--) {
-        const item = await readItemMethod(stream3, options);
+        const item = await readItemMethod(stream4, options);
         items.push(item);
       }
     }
@@ -57922,24 +57920,24 @@ var AvroPrimitiveType = class extends AvroType {
     this._primitive = primitive;
   }
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types
-  read(stream3, options = {}) {
+  read(stream4, options = {}) {
     switch (this._primitive) {
       case AvroPrimitive.NULL:
         return AvroParser.readNull();
       case AvroPrimitive.BOOLEAN:
-        return AvroParser.readBoolean(stream3, options);
+        return AvroParser.readBoolean(stream4, options);
       case AvroPrimitive.INT:
-        return AvroParser.readInt(stream3, options);
+        return AvroParser.readInt(stream4, options);
       case AvroPrimitive.LONG:
-        return AvroParser.readLong(stream3, options);
+        return AvroParser.readLong(stream4, options);
       case AvroPrimitive.FLOAT:
-        return AvroParser.readFloat(stream3, options);
+        return AvroParser.readFloat(stream4, options);
       case AvroPrimitive.DOUBLE:
-        return AvroParser.readDouble(stream3, options);
+        return AvroParser.readDouble(stream4, options);
       case AvroPrimitive.BYTES:
-        return AvroParser.readBytes(stream3, options);
+        return AvroParser.readBytes(stream4, options);
       case AvroPrimitive.STRING:
-        return AvroParser.readString(stream3, options);
+        return AvroParser.readString(stream4, options);
       default:
         throw new Error("Unknown Avro Primitive");
     }
@@ -57955,8 +57953,8 @@ var AvroEnumType = class extends AvroType {
     this._symbols = symbols;
   }
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types
-  async read(stream3, options = {}) {
-    const value = await AvroParser.readInt(stream3, options);
+  async read(stream4, options = {}) {
+    const value = await AvroParser.readInt(stream4, options);
     return this._symbols[value];
   }
 };
@@ -57969,9 +57967,9 @@ var AvroUnionType = class extends AvroType {
     super();
     this._types = types2;
   }
-  async read(stream3, options = {}) {
-    const typeIndex = await AvroParser.readInt(stream3, options);
-    return this._types[typeIndex].read(stream3, options);
+  async read(stream4, options = {}) {
+    const typeIndex = await AvroParser.readInt(stream4, options);
+    return this._types[typeIndex].read(stream4, options);
   }
 };
 var AvroMapType = class extends AvroType {
@@ -57984,11 +57982,11 @@ var AvroMapType = class extends AvroType {
     this._itemType = itemType;
   }
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types
-  read(stream3, options = {}) {
+  read(stream4, options = {}) {
     const readItemMethod = /* @__PURE__ */ __name((s, opts) => {
       return this._itemType.read(s, opts);
     }, "readItemMethod");
-    return AvroParser.readMap(stream3, readItemMethod, options);
+    return AvroParser.readMap(stream4, readItemMethod, options);
   }
 };
 var AvroRecordType = class extends AvroType {
@@ -58003,12 +58001,12 @@ var AvroRecordType = class extends AvroType {
     this._name = name;
   }
   // eslint-disable-next-line @typescript-eslint/no-wrapper-object-types
-  async read(stream3, options = {}) {
+  async read(stream4, options = {}) {
     const record = {};
     record["$schema"] = this._name;
     for (const key in this._fields) {
       if (Object.prototype.hasOwnProperty.call(this._fields, key)) {
-        record[key] = await this._fields[key].read(stream3, options);
+        record[key] = await this._fields[key].read(stream4, options);
       }
     }
     return record;
@@ -58183,7 +58181,7 @@ var AvroReadableFromStream = class extends AvroReadable {
       this._position += chunk.length;
       return this.toUint8Array(chunk);
     } else {
-      return new Promise((resolve3, reject) => {
+      return new Promise((resolve4, reject) => {
         const cleanUp = /* @__PURE__ */ __name(() => {
           this._readable.removeListener("readable", readableCallback);
           this._readable.removeListener("error", rejectCallback);
@@ -58198,7 +58196,7 @@ var AvroReadableFromStream = class extends AvroReadable {
           if (callbackChunk) {
             this._position += callbackChunk.length;
             cleanUp();
-            resolve3(this.toUint8Array(callbackChunk));
+            resolve4(this.toUint8Array(callbackChunk));
           }
         }, "readableCallback");
         const rejectCallback = /* @__PURE__ */ __name(() => {
@@ -58862,8 +58860,8 @@ var Poller = class {
     this.stopped = true;
     this.pollProgressCallbacks = [];
     this.operation = operation;
-    this.promise = new Promise((resolve3, reject) => {
-      this.resolve = resolve3;
+    this.promise = new Promise((resolve4, reject) => {
+      this.resolve = resolve4;
       this.reject = reject;
     });
     this.promise.catch(() => {
@@ -59276,8 +59274,8 @@ var Batch = class {
       return Promise.resolve();
     }
     this.parallelExecute();
-    return new Promise((resolve3, reject) => {
-      this.emitter.on("finish", resolve3);
+    return new Promise((resolve4, reject) => {
+      this.emitter.on("finish", resolve4);
       this.emitter.on("error", (error2) => {
         this.state = BatchStates.Error;
         reject(error2);
@@ -59321,18 +59319,18 @@ var Batch = class {
 // node_modules/@azure/storage-blob/dist/esm/utils/utils.js
 var import_node_fs = __toESM(require("node:fs"), 1);
 var import_node_util3 = __toESM(require("node:util"), 1);
-async function streamToBuffer(stream3, buffer3, offset, end, encoding) {
+async function streamToBuffer(stream4, buffer3, offset, end, encoding) {
   let pos = 0;
   const count = end - offset;
-  return new Promise((resolve3, reject) => {
+  return new Promise((resolve4, reject) => {
     const timeout = setTimeout(() => reject(new Error(`The operation cannot be completed in timeout.`)), REQUEST_TIMEOUT);
-    stream3.on("readable", () => {
+    stream4.on("readable", () => {
       if (pos >= count) {
         clearTimeout(timeout);
-        resolve3();
+        resolve4();
         return;
       }
-      let chunk = stream3.read();
+      let chunk = stream4.read();
       if (!chunk) {
         return;
       }
@@ -59343,14 +59341,14 @@ async function streamToBuffer(stream3, buffer3, offset, end, encoding) {
       buffer3.fill(chunk.slice(0, chunkLength), offset + pos, offset + pos + chunkLength);
       pos += chunkLength;
     });
-    stream3.on("end", () => {
+    stream4.on("end", () => {
       clearTimeout(timeout);
       if (pos < count) {
         reject(new Error(`Stream drains before getting enough data needed. Data read: ${pos}, data need: ${count}`));
       }
-      resolve3();
+      resolve4();
     });
-    stream3.on("error", (msg) => {
+    stream4.on("error", (msg) => {
       clearTimeout(timeout);
       reject(msg);
     });
@@ -59358,7 +59356,7 @@ async function streamToBuffer(stream3, buffer3, offset, end, encoding) {
 }
 __name(streamToBuffer, "streamToBuffer");
 async function readStreamToLocalFile(rs, file) {
-  return new Promise((resolve3, reject) => {
+  return new Promise((resolve4, reject) => {
     const ws = import_node_fs.default.createWriteStream(file);
     rs.on("error", (err) => {
       reject(err);
@@ -59366,7 +59364,7 @@ async function readStreamToLocalFile(rs, file) {
     ws.on("error", (err) => {
       reject(err);
     });
-    ws.on("close", resolve3);
+    ws.on("close", resolve4);
     rs.pipe(ws);
   });
 }
@@ -59401,21 +59399,21 @@ var BlobClient = class _BlobClient extends StorageClient2 {
   }
   constructor(urlOrConnectionString, credentialOrPipelineOrContainerName, blobNameOrOptions, options) {
     options = options || {};
-    let pipeline3;
+    let pipeline4;
     let url2;
     if (isPipelineLike(credentialOrPipelineOrContainerName)) {
       url2 = urlOrConnectionString;
-      pipeline3 = credentialOrPipelineOrContainerName;
+      pipeline4 = credentialOrPipelineOrContainerName;
     } else if (isNodeLike2 && credentialOrPipelineOrContainerName instanceof StorageSharedKeyCredential || credentialOrPipelineOrContainerName instanceof AnonymousCredential || isTokenCredential(credentialOrPipelineOrContainerName)) {
       url2 = urlOrConnectionString;
       options = blobNameOrOptions;
-      pipeline3 = newPipeline(credentialOrPipelineOrContainerName, options);
+      pipeline4 = newPipeline(credentialOrPipelineOrContainerName, options);
     } else if (!credentialOrPipelineOrContainerName && typeof credentialOrPipelineOrContainerName !== "string") {
       url2 = urlOrConnectionString;
       if (blobNameOrOptions && typeof blobNameOrOptions !== "string") {
         options = blobNameOrOptions;
       }
-      pipeline3 = newPipeline(new AnonymousCredential(), options);
+      pipeline4 = newPipeline(new AnonymousCredential(), options);
     } else if (credentialOrPipelineOrContainerName && typeof credentialOrPipelineOrContainerName === "string" && blobNameOrOptions && typeof blobNameOrOptions === "string") {
       const containerName = credentialOrPipelineOrContainerName;
       const blobName = blobNameOrOptions;
@@ -59427,20 +59425,20 @@ var BlobClient = class _BlobClient extends StorageClient2 {
           if (!options.proxyOptions) {
             options.proxyOptions = getDefaultProxySettings2(extractedCreds.proxyUri);
           }
-          pipeline3 = newPipeline(sharedKeyCredential, options);
+          pipeline4 = newPipeline(sharedKeyCredential, options);
         } else {
           throw new Error("Account connection string is only supported in Node.js environment");
         }
       } else if (extractedCreds.kind === "SASConnString") {
         url2 = appendToURLPath(appendToURLPath(extractedCreds.url, encodeURIComponent(containerName)), encodeURIComponent(blobName)) + "?" + extractedCreds.accountSas;
-        pipeline3 = newPipeline(new AnonymousCredential(), options);
+        pipeline4 = newPipeline(new AnonymousCredential(), options);
       } else {
         throw new Error("Connection string must be either an Account connection string or a SAS connection string");
       }
     } else {
       throw new Error("Expecting non-empty strings for containerName and blobName parameters");
     }
-    super(url2, pipeline3);
+    super(url2, pipeline4);
     ({ blobName: this._name, containerName: this._containerName } = this.getBlobAndContainerNamesFromUrl());
     this.blobContext = this.storageClientContext.blob;
     this._snapshot = getURLParameter(this.url, URLConstants2.Parameters.SNAPSHOT);
@@ -60157,8 +60155,8 @@ var BlobClient = class _BlobClient extends StorageClient2 {
             customerProvidedKey: options.customerProvidedKey,
             tracingOptions: updatedOptions.tracingOptions
           });
-          const stream3 = response.readableStreamBody;
-          await streamToBuffer(stream3, buffer3, off - offset, chunkEnd - offset);
+          const stream4 = response.readableStreamBody;
+          await streamToBuffer(stream4, buffer3, off - offset, chunkEnd - offset);
           transferProgress += chunkEnd - off;
           if (options.onProgress) {
             options.onProgress({ loadedBytes: transferProgress });
@@ -60282,7 +60280,7 @@ var BlobClient = class _BlobClient extends StorageClient2 {
    * @returns The SAS URI consisting of the URI to the resource represented by this client, followed by the generated SAS token.
    */
   generateSasUrl(options) {
-    return new Promise((resolve3) => {
+    return new Promise((resolve4) => {
       if (!(this.credential instanceof StorageSharedKeyCredential)) {
         throw new RangeError("Can only generate the SAS when the client is initialized with a shared key credential");
       }
@@ -60293,7 +60291,7 @@ var BlobClient = class _BlobClient extends StorageClient2 {
         versionId: this._versionId,
         ...options
       }, this.credential).toString();
-      resolve3(appendToURLQuery(this.url, sas));
+      resolve4(appendToURLQuery(this.url, sas));
     });
   }
   /**
@@ -60332,7 +60330,7 @@ var BlobClient = class _BlobClient extends StorageClient2 {
    * @returns The SAS URI consisting of the URI to the resource represented by this client, followed by the generated SAS token.
    */
   generateUserDelegationSasUrl(options, userDelegationKey) {
-    return new Promise((resolve3) => {
+    return new Promise((resolve4) => {
       const sas = generateBlobSASQueryParameters({
         containerName: this._containerName,
         blobName: this._name,
@@ -60340,7 +60338,7 @@ var BlobClient = class _BlobClient extends StorageClient2 {
         versionId: this._versionId,
         ...options
       }, userDelegationKey, this.accountName).toString();
-      resolve3(appendToURLQuery(this.url, sas));
+      resolve4(appendToURLQuery(this.url, sas));
     });
   }
   /**
@@ -60430,19 +60428,19 @@ var AppendBlobClient = class _AppendBlobClient extends BlobClient {
    */
   appendBlobContext;
   constructor(urlOrConnectionString, credentialOrPipelineOrContainerName, blobNameOrOptions, options) {
-    let pipeline3;
+    let pipeline4;
     let url2;
     options = options || {};
     if (isPipelineLike(credentialOrPipelineOrContainerName)) {
       url2 = urlOrConnectionString;
-      pipeline3 = credentialOrPipelineOrContainerName;
+      pipeline4 = credentialOrPipelineOrContainerName;
     } else if (isNodeLike2 && credentialOrPipelineOrContainerName instanceof StorageSharedKeyCredential || credentialOrPipelineOrContainerName instanceof AnonymousCredential || isTokenCredential(credentialOrPipelineOrContainerName)) {
       url2 = urlOrConnectionString;
       options = blobNameOrOptions;
-      pipeline3 = newPipeline(credentialOrPipelineOrContainerName, options);
+      pipeline4 = newPipeline(credentialOrPipelineOrContainerName, options);
     } else if (!credentialOrPipelineOrContainerName && typeof credentialOrPipelineOrContainerName !== "string") {
       url2 = urlOrConnectionString;
-      pipeline3 = newPipeline(new AnonymousCredential(), options);
+      pipeline4 = newPipeline(new AnonymousCredential(), options);
     } else if (credentialOrPipelineOrContainerName && typeof credentialOrPipelineOrContainerName === "string" && blobNameOrOptions && typeof blobNameOrOptions === "string") {
       const containerName = credentialOrPipelineOrContainerName;
       const blobName = blobNameOrOptions;
@@ -60454,20 +60452,20 @@ var AppendBlobClient = class _AppendBlobClient extends BlobClient {
           if (!options.proxyOptions) {
             options.proxyOptions = getDefaultProxySettings2(extractedCreds.proxyUri);
           }
-          pipeline3 = newPipeline(sharedKeyCredential, options);
+          pipeline4 = newPipeline(sharedKeyCredential, options);
         } else {
           throw new Error("Account connection string is only supported in Node.js environment");
         }
       } else if (extractedCreds.kind === "SASConnString") {
         url2 = appendToURLPath(appendToURLPath(extractedCreds.url, encodeURIComponent(containerName)), encodeURIComponent(blobName)) + "?" + extractedCreds.accountSas;
-        pipeline3 = newPipeline(new AnonymousCredential(), options);
+        pipeline4 = newPipeline(new AnonymousCredential(), options);
       } else {
         throw new Error("Connection string must be either an Account connection string or a SAS connection string");
       }
     } else {
       throw new Error("Expecting non-empty strings for containerName and blobName parameters");
     }
-    super(url2, pipeline3);
+    super(url2, pipeline4);
     this.appendBlobContext = this.storageClientContext.appendBlob;
   }
   /**
@@ -60705,22 +60703,22 @@ var BlockBlobClient = class _BlockBlobClient extends BlobClient {
    */
   blockBlobContext;
   constructor(urlOrConnectionString, credentialOrPipelineOrContainerName, blobNameOrOptions, options) {
-    let pipeline3;
+    let pipeline4;
     let url2;
     options = options || {};
     if (isPipelineLike(credentialOrPipelineOrContainerName)) {
       url2 = urlOrConnectionString;
-      pipeline3 = credentialOrPipelineOrContainerName;
+      pipeline4 = credentialOrPipelineOrContainerName;
     } else if (isNodeLike2 && credentialOrPipelineOrContainerName instanceof StorageSharedKeyCredential || credentialOrPipelineOrContainerName instanceof AnonymousCredential || isTokenCredential(credentialOrPipelineOrContainerName)) {
       url2 = urlOrConnectionString;
       options = blobNameOrOptions;
-      pipeline3 = newPipeline(credentialOrPipelineOrContainerName, options);
+      pipeline4 = newPipeline(credentialOrPipelineOrContainerName, options);
     } else if (!credentialOrPipelineOrContainerName && typeof credentialOrPipelineOrContainerName !== "string") {
       url2 = urlOrConnectionString;
       if (blobNameOrOptions && typeof blobNameOrOptions !== "string") {
         options = blobNameOrOptions;
       }
-      pipeline3 = newPipeline(new AnonymousCredential(), options);
+      pipeline4 = newPipeline(new AnonymousCredential(), options);
     } else if (credentialOrPipelineOrContainerName && typeof credentialOrPipelineOrContainerName === "string" && blobNameOrOptions && typeof blobNameOrOptions === "string") {
       const containerName = credentialOrPipelineOrContainerName;
       const blobName = blobNameOrOptions;
@@ -60732,20 +60730,20 @@ var BlockBlobClient = class _BlockBlobClient extends BlobClient {
           if (!options.proxyOptions) {
             options.proxyOptions = getDefaultProxySettings2(extractedCreds.proxyUri);
           }
-          pipeline3 = newPipeline(sharedKeyCredential, options);
+          pipeline4 = newPipeline(sharedKeyCredential, options);
         } else {
           throw new Error("Account connection string is only supported in Node.js environment");
         }
       } else if (extractedCreds.kind === "SASConnString") {
         url2 = appendToURLPath(appendToURLPath(extractedCreds.url, encodeURIComponent(containerName)), encodeURIComponent(blobName)) + "?" + extractedCreds.accountSas;
-        pipeline3 = newPipeline(new AnonymousCredential(), options);
+        pipeline4 = newPipeline(new AnonymousCredential(), options);
       } else {
         throw new Error("Connection string must be either an Account connection string or a SAS connection string");
       }
     } else {
       throw new Error("Expecting non-empty strings for containerName and blobName parameters");
     }
-    super(url2, pipeline3);
+    super(url2, pipeline4);
     this.blockBlobContext = this.storageClientContext.blockBlob;
     this._blobContext = this.storageClientContext.blob;
   }
@@ -61265,7 +61263,7 @@ var BlockBlobClient = class _BlockBlobClient extends BlobClient {
    * @param options - Options to Upload Stream to Block Blob operation.
    * @returns Response data for the Blob Upload operation.
    */
-  async uploadStream(stream3, bufferSize = DEFAULT_BLOCK_BUFFER_SIZE_BYTES, maxConcurrency = 5, options = {}) {
+  async uploadStream(stream4, bufferSize = DEFAULT_BLOCK_BUFFER_SIZE_BYTES, maxConcurrency = 5, options = {}) {
     if (!options.blobHTTPHeaders) {
       options.blobHTTPHeaders = {};
     }
@@ -61278,7 +61276,7 @@ var BlockBlobClient = class _BlockBlobClient extends BlobClient {
       let transferProgress = 0;
       const blockList = [];
       const scheduler = new BufferScheduler(
-        stream3,
+        stream4,
         bufferSize,
         maxConcurrency,
         async (body2, length) => {
@@ -61319,19 +61317,19 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
    */
   pageBlobContext;
   constructor(urlOrConnectionString, credentialOrPipelineOrContainerName, blobNameOrOptions, options) {
-    let pipeline3;
+    let pipeline4;
     let url2;
     options = options || {};
     if (isPipelineLike(credentialOrPipelineOrContainerName)) {
       url2 = urlOrConnectionString;
-      pipeline3 = credentialOrPipelineOrContainerName;
+      pipeline4 = credentialOrPipelineOrContainerName;
     } else if (isNodeLike2 && credentialOrPipelineOrContainerName instanceof StorageSharedKeyCredential || credentialOrPipelineOrContainerName instanceof AnonymousCredential || isTokenCredential(credentialOrPipelineOrContainerName)) {
       url2 = urlOrConnectionString;
       options = blobNameOrOptions;
-      pipeline3 = newPipeline(credentialOrPipelineOrContainerName, options);
+      pipeline4 = newPipeline(credentialOrPipelineOrContainerName, options);
     } else if (!credentialOrPipelineOrContainerName && typeof credentialOrPipelineOrContainerName !== "string") {
       url2 = urlOrConnectionString;
-      pipeline3 = newPipeline(new AnonymousCredential(), options);
+      pipeline4 = newPipeline(new AnonymousCredential(), options);
     } else if (credentialOrPipelineOrContainerName && typeof credentialOrPipelineOrContainerName === "string" && blobNameOrOptions && typeof blobNameOrOptions === "string") {
       const containerName = credentialOrPipelineOrContainerName;
       const blobName = blobNameOrOptions;
@@ -61343,20 +61341,20 @@ var PageBlobClient = class _PageBlobClient extends BlobClient {
           if (!options.proxyOptions) {
             options.proxyOptions = getDefaultProxySettings2(extractedCreds.proxyUri);
           }
-          pipeline3 = newPipeline(sharedKeyCredential, options);
+          pipeline4 = newPipeline(sharedKeyCredential, options);
         } else {
           throw new Error("Account connection string is only supported in Node.js environment");
         }
       } else if (extractedCreds.kind === "SASConnString") {
         url2 = appendToURLPath(appendToURLPath(extractedCreds.url, encodeURIComponent(containerName)), encodeURIComponent(blobName)) + "?" + extractedCreds.accountSas;
-        pipeline3 = newPipeline(new AnonymousCredential(), options);
+        pipeline4 = newPipeline(new AnonymousCredential(), options);
       } else {
         throw new Error("Connection string must be either an Account connection string or a SAS connection string");
       }
     } else {
       throw new Error("Expecting non-empty strings for containerName and blobName parameters");
     }
-    super(url2, pipeline3);
+    super(url2, pipeline4);
     this.pageBlobContext = this.storageClientContext.pageBlob;
   }
   /**
@@ -62118,12 +62116,12 @@ var RateLimitError = class extends Error {
 // node_modules/@actions/cache/lib/internal/uploadUtils.js
 var __awaiter11 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -62141,7 +62139,7 @@ var __awaiter11 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -62270,12 +62268,12 @@ var util4 = __toESM(require("util"), 1);
 // node_modules/@actions/cache/lib/internal/requestUtils.js
 var __awaiter12 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -62293,7 +62291,7 @@ var __awaiter12 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -62327,7 +62325,7 @@ function isRetryableStatusCode(statusCode) {
 __name(isRetryableStatusCode, "isRetryableStatusCode");
 function sleep(milliseconds) {
   return __awaiter12(this, void 0, void 0, function* () {
-    return new Promise((resolve3) => setTimeout(resolve3, milliseconds));
+    return new Promise((resolve4) => setTimeout(resolve4, milliseconds));
   });
 }
 __name(sleep, "sleep");
@@ -62406,12 +62404,12 @@ __name(retryHttpClientResponse, "retryHttpClientResponse");
 // node_modules/@actions/cache/lib/internal/downloadUtils.js
 var __awaiter13 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -62429,7 +62427,7 @@ var __awaiter13 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -62437,8 +62435,8 @@ var __awaiter13 = function(thisArg, _arguments, P, generator) {
 };
 function pipeResponseToStream(response, output) {
   return __awaiter13(this, void 0, void 0, function* () {
-    const pipeline3 = util4.promisify(stream.pipeline);
-    yield pipeline3(response.message, output);
+    const pipeline4 = util4.promisify(stream.pipeline);
+    yield pipeline4(response.message, output);
   });
 }
 __name(pipeResponseToStream, "pipeResponseToStream");
@@ -62718,8 +62716,8 @@ function downloadCacheStorageSDK(archiveLocation, archivePath, options) {
 __name(downloadCacheStorageSDK, "downloadCacheStorageSDK");
 var promiseWithTimeout = /* @__PURE__ */ __name((timeoutMs, promise) => __awaiter13(void 0, void 0, void 0, function* () {
   let timeoutHandle;
-  const timeoutPromise = new Promise((resolve3) => {
-    timeoutHandle = setTimeout(() => resolve3("timeout"), timeoutMs);
+  const timeoutPromise = new Promise((resolve4) => {
+    timeoutHandle = setTimeout(() => resolve4("timeout"), timeoutMs);
   });
   return Promise.race([promise, timeoutPromise]).then((result) => {
     clearTimeout(timeoutHandle);
@@ -62835,12 +62833,12 @@ __name(getUserAgentString2, "getUserAgentString");
 // node_modules/@actions/cache/lib/internal/cacheHttpClient.js
 var __awaiter14 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -62858,7 +62856,7 @@ var __awaiter14 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -63773,12 +63771,12 @@ __name(maskSecretUrls, "maskSecretUrls");
 // node_modules/@actions/cache/lib/internal/shared/cacheTwirpClient.js
 var __awaiter15 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -63796,7 +63794,7 @@ var __awaiter15 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -63929,7 +63927,7 @@ var CacheServiceClient = class {
   }
   sleep(milliseconds) {
     return __awaiter15(this, void 0, void 0, function* () {
-      return new Promise((resolve3) => setTimeout(resolve3, milliseconds));
+      return new Promise((resolve4) => setTimeout(resolve4, milliseconds));
     });
   }
   getExponentialRetryTimeMilliseconds(attempt) {
@@ -63955,12 +63953,12 @@ var import_fs2 = require("fs");
 var path10 = __toESM(require("path"), 1);
 var __awaiter16 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -63978,7 +63976,7 @@ var __awaiter16 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -64169,12 +64167,12 @@ __name(createTar, "createTar");
 // node_modules/@actions/cache/lib/cache.js
 var __awaiter17 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -64192,7 +64190,7 @@ var __awaiter17 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -66842,8 +66840,8 @@ var SearchState2 = class {
   static {
     __name(this, "SearchState");
   }
-  constructor(path21, level) {
-    this.path = path21;
+  constructor(path22, level) {
+    this.path = path22;
     this.level = level;
   }
 };
@@ -66851,12 +66849,12 @@ var SearchState2 = class {
 // node_modules/@actions/glob/lib/internal-globber.js
 var __awaiter18 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -66874,7 +66872,7 @@ var __awaiter18 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -66888,15 +66886,15 @@ var __asyncValues3 = function(o) {
   }, i);
   function verb(n) {
     i[n] = o[n] && function(v) {
-      return new Promise(function(resolve3, reject) {
-        v = o[n](v), settle(resolve3, reject, v.done, v.value);
+      return new Promise(function(resolve4, reject) {
+        v = o[n](v), settle(resolve4, reject, v.done, v.value);
       });
     };
   }
   __name(verb, "verb");
-  function settle(resolve3, reject, d, v) {
+  function settle(resolve4, reject, d, v) {
     Promise.resolve(v).then(function(v2) {
-      resolve3({ value: v2, done: d });
+      resolve4({ value: v2, done: d });
     }, reject);
   }
   __name(settle, "settle");
@@ -67101,15 +67099,20 @@ var DefaultGlobber2 = class _DefaultGlobber {
   }
 };
 
-// node_modules/@actions/glob/lib/glob.js
+// node_modules/@actions/glob/lib/internal-hash-files.js
+var crypto4 = __toESM(require("crypto"), 1);
+var fs9 = __toESM(require("fs"), 1);
+var stream2 = __toESM(require("stream"), 1);
+var util5 = __toESM(require("util"), 1);
+var path17 = __toESM(require("path"), 1);
 var __awaiter19 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -67127,23 +67130,140 @@ var __awaiter19 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    __name(step, "step");
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
+var __asyncValues4 = function(o) {
+  if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+  var m = o[Symbol.asyncIterator], i;
+  return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function() {
+    return this;
+  }, i);
+  function verb(n) {
+    i[n] = o[n] && function(v) {
+      return new Promise(function(resolve4, reject) {
+        v = o[n](v), settle(resolve4, reject, v.done, v.value);
+      });
+    };
+  }
+  __name(verb, "verb");
+  function settle(resolve4, reject, d, v) {
+    Promise.resolve(v).then(function(v2) {
+      resolve4({ value: v2, done: d });
+    }, reject);
+  }
+  __name(settle, "settle");
+};
+function hashFiles2(globber_1, currentWorkspace_1) {
+  return __awaiter19(this, arguments, void 0, function* (globber, currentWorkspace, verbose = false) {
+    var _a2, e_1, _b, _c;
+    var _d;
+    const writeDelegate = verbose ? info : debug;
+    let hasMatch = false;
+    const githubWorkspace = currentWorkspace ? currentWorkspace : (_d = process.env["GITHUB_WORKSPACE"]) !== null && _d !== void 0 ? _d : process.cwd();
+    const result = crypto4.createHash("sha256");
+    let count = 0;
+    try {
+      for (var _e = true, _f = __asyncValues4(globber.globGenerator()), _g; _g = yield _f.next(), _a2 = _g.done, !_a2; _e = true) {
+        _c = _g.value;
+        _e = false;
+        const file = _c;
+        writeDelegate(file);
+        if (!file.startsWith(`${githubWorkspace}${path17.sep}`)) {
+          writeDelegate(`Ignore '${file}' since it is not under GITHUB_WORKSPACE.`);
+          continue;
+        }
+        if (fs9.statSync(file).isDirectory()) {
+          writeDelegate(`Skip directory '${file}'.`);
+          continue;
+        }
+        const hash = crypto4.createHash("sha256");
+        const pipeline4 = util5.promisify(stream2.pipeline);
+        yield pipeline4(fs9.createReadStream(file), hash);
+        result.write(hash.digest());
+        count++;
+        if (!hasMatch) {
+          hasMatch = true;
+        }
+      }
+    } catch (e_1_1) {
+      e_1 = { error: e_1_1 };
+    } finally {
+      try {
+        if (!_e && !_a2 && (_b = _f.return)) yield _b.call(_f);
+      } finally {
+        if (e_1) throw e_1.error;
+      }
+    }
+    result.end();
+    if (hasMatch) {
+      writeDelegate(`Found ${count} files to hash.`);
+      return result.digest("hex");
+    } else {
+      writeDelegate(`No matches found for glob`);
+      return "";
+    }
+  });
+}
+__name(hashFiles2, "hashFiles");
+
+// node_modules/@actions/glob/lib/glob.js
+var __awaiter20 = function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
+    });
+  }
+  __name(adopt, "adopt");
+  return new (P || (P = Promise))(function(resolve4, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    __name(fulfilled, "fulfilled");
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    __name(rejected, "rejected");
+    function step(result) {
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 };
 function create2(patterns, options) {
-  return __awaiter19(this, void 0, void 0, function* () {
+  return __awaiter20(this, void 0, void 0, function* () {
     return yield DefaultGlobber2.create(patterns, options);
   });
 }
 __name(create2, "create");
+function hashFiles3(patterns_1) {
+  return __awaiter20(this, arguments, void 0, function* (patterns, currentWorkspace = "", options, verbose = false) {
+    let followSymbolicLinks = true;
+    if (options && typeof options.followSymbolicLinks === "boolean") {
+      followSymbolicLinks = options.followSymbolicLinks;
+    }
+    const globber = yield create2(patterns, { followSymbolicLinks });
+    return hashFiles2(globber, currentWorkspace, verbose);
+  });
+}
+__name(hashFiles3, "hashFiles");
 
 // src/prek.ts
-var fs9 = __toESM(require("node:fs/promises"), 1);
+var fs10 = __toESM(require("node:fs/promises"), 1);
 var os9 = __toESM(require("node:os"), 1);
-var path17 = __toESM(require("node:path"), 1);
+var path18 = __toESM(require("node:path"), 1);
 
 // node_modules/string-argv/index.js
 function parseArgsStringToArgv(value, env, file) {
@@ -67198,13 +67318,13 @@ async function runPrek(workingDirectory, extraArgs) {
   });
 }
 __name(runPrek, "runPrek");
-async function showVerboseLogs() {
+async function showVerboseLogs(workingDirectory) {
   startGroup("Prek verbose logs");
   try {
-    const cacheDir = await getPrekCacheDir();
-    const logPath = path17.join(cacheDir, "prek.log");
+    const cacheDir = await getPrekCacheDir(workingDirectory);
+    const logPath = path18.join(cacheDir, "prek.log");
     try {
-      const log2 = await fs9.readFile(logPath, "utf8");
+      const log2 = await fs10.readFile(logPath, "utf8");
       process.stdout.write(log2);
       if (!log2.endsWith("\n")) {
         process.stdout.write("\n");
@@ -67217,10 +67337,11 @@ async function showVerboseLogs() {
   }
 }
 __name(showVerboseLogs, "showVerboseLogs");
-async function pruneCache() {
+async function pruneCache(workingDirectory) {
   startGroup("Pruning prek cache");
   try {
     const code = await exec("prek", ["cache", "gc", "-v"], {
+      cwd: workingDirectory,
       ignoreReturnCode: true
     });
     if (code !== 0) {
@@ -67231,11 +67352,12 @@ async function pruneCache() {
   }
 }
 __name(pruneCache, "pruneCache");
-async function getPrekCacheDir() {
+async function getPrekCacheDir(workingDirectory) {
   let output = "";
   let code;
   try {
     code = await exec("prek", ["cache", "dir", "--no-log-file", "--color=never"], {
+      cwd: workingDirectory,
       ignoreReturnCode: true,
       listeners: {
         stdout: /* @__PURE__ */ __name((data) => {
@@ -67246,7 +67368,7 @@ async function getPrekCacheDir() {
     });
   } catch (error2) {
     info(`Failed to query prek cache dir: ${formatError(error2)}`);
-    return getDefaultPrekCacheDir();
+    return getDefaultPrekCacheDir(workingDirectory);
   }
   if (code === 0) {
     const trimmed = output.trim();
@@ -67255,29 +67377,32 @@ async function getPrekCacheDir() {
       return trimmed;
     }
   }
-  return getDefaultPrekCacheDir();
+  return getDefaultPrekCacheDir(workingDirectory);
 }
 __name(getPrekCacheDir, "getPrekCacheDir");
-function getDefaultPrekCacheDir() {
+function getDefaultPrekCacheDir(workingDirectory = process.cwd()) {
   const prekHome = process.env.PREK_HOME;
   if (prekHome) {
-    const fallback2 = prekHome.startsWith("~/") ? path17.join(os9.homedir(), prekHome.slice(2)) : prekHome;
+    const fallback2 = path18.resolve(
+      workingDirectory,
+      prekHome.startsWith("~/") ? path18.join(os9.homedir(), prekHome.slice(2)) : prekHome
+    );
     info(`Falling back to default prek cache dir ${fallback2}`);
     return fallback2;
   }
   if (process.platform === "win32") {
-    const localAppData = process.env.LOCALAPPDATA || path17.join(os9.homedir(), "AppData", "Local");
-    const fallback2 = path17.join(localAppData, "prek");
+    const localAppData = process.env.LOCALAPPDATA || path18.join(os9.homedir(), "AppData", "Local");
+    const fallback2 = path18.join(localAppData, "prek");
     info(`Falling back to default prek cache dir ${fallback2}`);
     return fallback2;
   }
   const xdgCacheHome = process.env.XDG_CACHE_HOME;
-  if (xdgCacheHome && path17.isAbsolute(xdgCacheHome)) {
-    const fallback2 = path17.join(xdgCacheHome, "prek");
+  if (xdgCacheHome && path18.isAbsolute(xdgCacheHome)) {
+    const fallback2 = path18.join(xdgCacheHome, "prek");
     info(`Falling back to default prek cache dir ${fallback2}`);
     return fallback2;
   }
-  const fallback = path17.join(os9.homedir(), ".cache", "prek");
+  const fallback = path18.join(os9.homedir(), ".cache", "prek");
   info(`Falling back to default prek cache dir ${fallback}`);
   return fallback;
 }
@@ -67288,7 +67413,7 @@ var CACHE_KEY_STATE = "prek-cache-primary-key";
 var CACHE_MATCHED_KEY_STATE = "prek-cache-matched-key";
 var CACHE_PATHS_STATE = "prek-cache-paths";
 var POST_ACTION_STATE = "prek-action-post";
-var PREK_CACHE_KEY_PREFIX = "prek-v1";
+var PREK_CACHE_KEY_PREFIX = "prek-v2";
 
 // src/cache.ts
 function formatError2(error2) {
@@ -67297,7 +67422,7 @@ function formatError2(error2) {
 __name(formatError2, "formatError");
 async function restorePrekCache(workingDirectory) {
   startGroup("Restore prek cache");
-  const cacheDir = await getPrekCacheDir();
+  const cacheDir = await getPrekCacheDir(workingDirectory);
   const paths = [cacheDir];
   const primaryKey = await buildCacheKey(workingDirectory);
   saveState(CACHE_KEY_STATE, primaryKey);
@@ -67349,7 +67474,7 @@ async function savePrekCache() {
 }
 __name(savePrekCache, "savePrekCache");
 async function buildCacheKey(workingDirectory) {
-  const normalizedWorkingDirectory = path18.resolve(workingDirectory);
+  const normalizedWorkingDirectory = path19.resolve(workingDirectory);
   const hash = await hashConfigFiles(normalizedWorkingDirectory);
   const pythonLocation = process.env.pythonLocation || "";
   const runnerOs = process.env.RUNNER_OS || process.platform;
@@ -67358,27 +67483,16 @@ async function buildCacheKey(workingDirectory) {
 }
 __name(buildCacheKey, "buildCacheKey");
 async function hashConfigFiles(workingDirectory) {
-  const matcher = await create2(getConfigPatterns(workingDirectory).join("\n"));
-  const files = await matcher.glob();
-  if (files.length === 0) {
-    return "no-config";
-  }
-  const digest = crypto4.createHash("sha256");
-  for (const file of files.sort()) {
-    digest.update(path18.relative(workingDirectory, file));
-    digest.update("\0");
-    digest.update(
-      crypto4.createHash("sha256").update(await fs10.readFile(file)).digest()
-    );
-  }
-  return digest.digest("hex");
+  return await hashFiles3(getConfigPatterns(workingDirectory).join("\n"), workingDirectory, {
+    followSymbolicLinks: false
+  }) || "no-config";
 }
 __name(hashConfigFiles, "hashConfigFiles");
 function getConfigPatterns(workingDirectory) {
   return [
-    path18.join(workingDirectory, "**", "prek.toml").replaceAll(path18.sep, "/"),
-    path18.join(workingDirectory, "**", ".pre-commit-config.yaml").replaceAll(path18.sep, "/"),
-    path18.join(workingDirectory, "**", ".pre-commit-config.yml").replaceAll(path18.sep, "/")
+    path19.join(workingDirectory, "**", "prek.toml").replaceAll(path19.sep, "/"),
+    path19.join(workingDirectory, "**", ".pre-commit-config.yaml").replaceAll(path19.sep, "/"),
+    path19.join(workingDirectory, "**", ".pre-commit-config.yml").replaceAll(path19.sep, "/")
   ];
 }
 __name(getConfigPatterns, "getConfigPatterns");
@@ -67402,7 +67516,7 @@ __name(getInputs, "getInputs");
 var crypto6 = __toESM(require("node:crypto"), 1);
 var import_node_fs2 = require("node:fs");
 var fs13 = __toESM(require("node:fs/promises"), 1);
-var path20 = __toESM(require("node:path"), 1);
+var path21 = __toESM(require("node:path"), 1);
 
 // node_modules/@actions/tool-cache/lib/tool-cache.js
 var crypto5 = __toESM(require("crypto"), 1);
@@ -67413,21 +67527,21 @@ var semver2 = __toESM(require_semver2(), 1);
 
 // node_modules/@actions/tool-cache/lib/tool-cache.js
 var os10 = __toESM(require("os"), 1);
-var path19 = __toESM(require("path"), 1);
+var path20 = __toESM(require("path"), 1);
 var semver3 = __toESM(require_semver2(), 1);
-var stream2 = __toESM(require("stream"), 1);
-var util5 = __toESM(require("util"), 1);
+var stream3 = __toESM(require("stream"), 1);
+var util6 = __toESM(require("util"), 1);
 var import_assert8 = require("assert");
 
 // node_modules/@actions/tool-cache/lib/retry-helper.js
-var __awaiter20 = function(thisArg, _arguments, P, generator) {
+var __awaiter21 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -67445,7 +67559,7 @@ var __awaiter20 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -67467,7 +67581,7 @@ var RetryHelper = class {
     }
   }
   execute(action5, isRetryable) {
-    return __awaiter20(this, void 0, void 0, function* () {
+    return __awaiter21(this, void 0, void 0, function* () {
       let attempt = 1;
       while (attempt < this.maxAttempts) {
         try {
@@ -67490,21 +67604,21 @@ var RetryHelper = class {
     return Math.floor(Math.random() * (this.maxSeconds - this.minSeconds + 1)) + this.minSeconds;
   }
   sleep(seconds) {
-    return __awaiter20(this, void 0, void 0, function* () {
-      return new Promise((resolve3) => setTimeout(resolve3, seconds * 1e3));
+    return __awaiter21(this, void 0, void 0, function* () {
+      return new Promise((resolve4) => setTimeout(resolve4, seconds * 1e3));
     });
   }
 };
 
 // node_modules/@actions/tool-cache/lib/tool-cache.js
-var __awaiter21 = function(thisArg, _arguments, P, generator) {
+var __awaiter22 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve3) {
-      resolve3(value);
+    return value instanceof P ? value : new P(function(resolve4) {
+      resolve4(value);
     });
   }
   __name(adopt, "adopt");
-  return new (P || (P = Promise))(function(resolve3, reject) {
+  return new (P || (P = Promise))(function(resolve4, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -67522,7 +67636,7 @@ var __awaiter21 = function(thisArg, _arguments, P, generator) {
     }
     __name(rejected, "rejected");
     function step(result) {
-      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve4(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     __name(step, "step");
     step((generator = generator.apply(thisArg, _arguments || [])).next());
@@ -67542,16 +67656,16 @@ var IS_WINDOWS14 = process.platform === "win32";
 var IS_MAC = process.platform === "darwin";
 var userAgent = "actions/tool-cache";
 function downloadTool(url2, dest, auth, headers) {
-  return __awaiter21(this, void 0, void 0, function* () {
-    dest = dest || path19.join(_getTempDirectory(), crypto5.randomUUID());
-    yield mkdirP(path19.dirname(dest));
+  return __awaiter22(this, void 0, void 0, function* () {
+    dest = dest || path20.join(_getTempDirectory(), crypto5.randomUUID());
+    yield mkdirP(path20.dirname(dest));
     debug(`Downloading ${url2}`);
     debug(`Destination ${dest}`);
     const maxAttempts = 3;
     const minSeconds = _getGlobal("TEST_DOWNLOAD_TOOL_RETRY_MIN_SECONDS", 10);
     const maxSeconds = _getGlobal("TEST_DOWNLOAD_TOOL_RETRY_MAX_SECONDS", 20);
     const retryHelper = new RetryHelper(maxAttempts, minSeconds, maxSeconds);
-    return yield retryHelper.execute(() => __awaiter21(this, void 0, void 0, function* () {
+    return yield retryHelper.execute(() => __awaiter22(this, void 0, void 0, function* () {
       return yield downloadToolAttempt(url2, dest || "", auth, headers);
     }), (err) => {
       if (err instanceof HTTPError && err.httpStatusCode) {
@@ -67565,7 +67679,7 @@ function downloadTool(url2, dest, auth, headers) {
 }
 __name(downloadTool, "downloadTool");
 function downloadToolAttempt(url2, dest, auth, headers) {
-  return __awaiter21(this, void 0, void 0, function* () {
+  return __awaiter22(this, void 0, void 0, function* () {
     if (fs11.existsSync(dest)) {
       throw new Error(`Destination file path ${dest} already exists`);
     }
@@ -67585,12 +67699,12 @@ function downloadToolAttempt(url2, dest, auth, headers) {
       debug(`Failed to download from "${url2}". Code(${response.message.statusCode}) Message(${response.message.statusMessage})`);
       throw err;
     }
-    const pipeline3 = util5.promisify(stream2.pipeline);
+    const pipeline4 = util6.promisify(stream3.pipeline);
     const responseMessageFactory = _getGlobal("TEST_DOWNLOAD_TOOL_RESPONSE_MESSAGE_FACTORY", () => response.message);
     const readStream = responseMessageFactory();
     let succeeded = false;
     try {
-      yield pipeline3(readStream, fs11.createWriteStream(dest));
+      yield pipeline4(readStream, fs11.createWriteStream(dest));
       debug("download complete");
       succeeded = true;
       return dest;
@@ -67608,7 +67722,7 @@ function downloadToolAttempt(url2, dest, auth, headers) {
 }
 __name(downloadToolAttempt, "downloadToolAttempt");
 function extractTar2(file_1, dest_1) {
-  return __awaiter21(this, arguments, void 0, function* (file, dest, flags = "xz") {
+  return __awaiter22(this, arguments, void 0, function* (file, dest, flags = "xz") {
     if (!file) {
       throw new Error("parameter 'file' is required");
     }
@@ -67652,7 +67766,7 @@ function extractTar2(file_1, dest_1) {
 }
 __name(extractTar2, "extractTar");
 function extractZip(file, dest) {
-  return __awaiter21(this, void 0, void 0, function* () {
+  return __awaiter22(this, void 0, void 0, function* () {
     if (!file) {
       throw new Error("parameter 'file' is required");
     }
@@ -67667,7 +67781,7 @@ function extractZip(file, dest) {
 }
 __name(extractZip, "extractZip");
 function extractZipWin(file, dest) {
-  return __awaiter21(this, void 0, void 0, function* () {
+  return __awaiter22(this, void 0, void 0, function* () {
     const escapedFile = file.replace(/'/g, "''").replace(/"|\n|\r/g, "");
     const escapedDest = dest.replace(/'/g, "''").replace(/"|\n|\r/g, "");
     const pwshPath = yield which("pwsh", false);
@@ -67714,7 +67828,7 @@ function extractZipWin(file, dest) {
 }
 __name(extractZipWin, "extractZipWin");
 function extractZipNix(file, dest) {
-  return __awaiter21(this, void 0, void 0, function* () {
+  return __awaiter22(this, void 0, void 0, function* () {
     const unzipPath = yield which("unzip", true);
     const args = [file];
     if (!isDebug()) {
@@ -67726,7 +67840,7 @@ function extractZipNix(file, dest) {
 }
 __name(extractZipNix, "extractZipNix");
 function cacheFile(sourceFile, targetFile, tool, version3, arch3) {
-  return __awaiter21(this, void 0, void 0, function* () {
+  return __awaiter22(this, void 0, void 0, function* () {
     version3 = semver3.clean(version3) || version3;
     arch3 = arch3 || os10.arch();
     debug(`Caching tool ${tool} ${version3} ${arch3}`);
@@ -67735,7 +67849,7 @@ function cacheFile(sourceFile, targetFile, tool, version3, arch3) {
       throw new Error("sourceFile is not a file");
     }
     const destFolder = yield _createToolPath(tool, version3, arch3);
-    const destPath = path19.join(destFolder, targetFile);
+    const destPath = path20.join(destFolder, targetFile);
     debug(`destination file ${destPath}`);
     yield cp(sourceFile, destPath);
     _completeToolPath(tool, version3, arch3);
@@ -67759,7 +67873,7 @@ function find(toolName, versionSpec, arch3) {
   let toolPath = "";
   if (versionSpec) {
     versionSpec = semver3.clean(versionSpec) || "";
-    const cachePath = path19.join(_getCacheDirectory(), toolName, versionSpec, arch3);
+    const cachePath = path20.join(_getCacheDirectory(), toolName, versionSpec, arch3);
     debug(`checking cache: ${cachePath}`);
     if (fs11.existsSync(cachePath) && fs11.existsSync(`${cachePath}.complete`)) {
       debug(`Found tool in cache ${toolName} ${versionSpec} ${arch3}`);
@@ -67774,12 +67888,12 @@ __name(find, "find");
 function findAllVersions(toolName, arch3) {
   const versions = [];
   arch3 = arch3 || os10.arch();
-  const toolPath = path19.join(_getCacheDirectory(), toolName);
+  const toolPath = path20.join(_getCacheDirectory(), toolName);
   if (fs11.existsSync(toolPath)) {
     const children = fs11.readdirSync(toolPath);
     for (const child2 of children) {
       if (isExplicitVersion(child2)) {
-        const fullPath = path19.join(toolPath, child2, arch3 || "");
+        const fullPath = path20.join(toolPath, child2, arch3 || "");
         if (fs11.existsSync(fullPath) && fs11.existsSync(`${fullPath}.complete`)) {
           versions.push(child2);
         }
@@ -67790,9 +67904,9 @@ function findAllVersions(toolName, arch3) {
 }
 __name(findAllVersions, "findAllVersions");
 function _createExtractFolder(dest) {
-  return __awaiter21(this, void 0, void 0, function* () {
+  return __awaiter22(this, void 0, void 0, function* () {
     if (!dest) {
-      dest = path19.join(_getTempDirectory(), crypto5.randomUUID());
+      dest = path20.join(_getTempDirectory(), crypto5.randomUUID());
     }
     yield mkdirP(dest);
     return dest;
@@ -67800,8 +67914,8 @@ function _createExtractFolder(dest) {
 }
 __name(_createExtractFolder, "_createExtractFolder");
 function _createToolPath(tool, version3, arch3) {
-  return __awaiter21(this, void 0, void 0, function* () {
-    const folderPath = path19.join(_getCacheDirectory(), tool, semver3.clean(version3) || version3, arch3 || "");
+  return __awaiter22(this, void 0, void 0, function* () {
+    const folderPath = path20.join(_getCacheDirectory(), tool, semver3.clean(version3) || version3, arch3 || "");
     debug(`destination ${folderPath}`);
     const markerPath = `${folderPath}.complete`;
     yield rmRF(folderPath);
@@ -67812,7 +67926,7 @@ function _createToolPath(tool, version3, arch3) {
 }
 __name(_createToolPath, "_createToolPath");
 function _completeToolPath(tool, version3, arch3) {
-  const folderPath = path19.join(_getCacheDirectory(), tool, semver3.clean(version3) || version3, arch3 || "");
+  const folderPath = path20.join(_getCacheDirectory(), tool, semver3.clean(version3) || version3, arch3 || "");
   const markerPath = `${folderPath}.complete`;
   fs11.writeFileSync(markerPath, "");
   debug("finished caching tool");
@@ -69353,7 +69467,7 @@ function getToolCacheArchFor(arch3, linuxLibc) {
 __name(getToolCacheArchFor, "getToolCacheArchFor");
 async function getBinaryPath(rootDir, asset) {
   if (asset.archiveType === "zip") {
-    const binaryPath2 = path20.join(rootDir, asset.binaryName);
+    const binaryPath2 = path21.join(rootDir, asset.binaryName);
     info(`Resolved binary path to ${binaryPath2}`);
     return binaryPath2;
   }
@@ -69361,7 +69475,7 @@ async function getBinaryPath(rootDir, asset) {
   if (!entry) {
     throw new Error(`Extracted archive is empty: ${rootDir}`);
   }
-  const binaryPath = path20.join(rootDir, entry, asset.binaryName);
+  const binaryPath = path21.join(rootDir, entry, asset.binaryName);
   info(`Resolved binary path to ${binaryPath}`);
   return binaryPath;
 }
@@ -69397,13 +69511,13 @@ function buildChecksumKey(version3, assetName) {
 __name(buildChecksumKey, "buildChecksumKey");
 async function hashFile(filePath) {
   const hash = crypto6.createHash("sha256");
-  await new Promise((resolve3, reject) => {
-    const stream3 = (0, import_node_fs2.createReadStream)(filePath);
-    stream3.on("data", (chunk) => {
+  await new Promise((resolve4, reject) => {
+    const stream4 = (0, import_node_fs2.createReadStream)(filePath);
+    stream4.on("data", (chunk) => {
       hash.update(chunk);
     });
-    stream3.on("end", resolve3);
-    stream3.on("error", reject);
+    stream4.on("end", resolve4);
+    stream4.on("error", reject);
   });
   return hash.digest("hex");
 }
@@ -69434,10 +69548,10 @@ async function run() {
     exitCode = await runPrek(inputs.workingDirectory, inputs.extraArgs);
   } finally {
     if (inputs.showVerboseLogs) {
-      await showVerboseLogs();
+      await showVerboseLogs(inputs.workingDirectory);
     }
     if (exitCode === 0) {
-      await pruneCache();
+      await pruneCache(inputs.workingDirectory);
     }
   }
   if (exitCode !== 0) {

@@ -138,6 +138,14 @@ describe('run', () => {
       ['cache-hit', 'false'],
     ])
   })
+
+  it('uses the configured working directory for verbose logs and pruning', async () => {
+    mockContext.inputs.showVerboseLogs = true
+    const { run } = await importMainModule()
+    await run()
+    expect(dependencyMocks.showVerboseLogs).toHaveBeenCalledWith('/tmp/repo')
+    expect(dependencyMocks.pruneCache).toHaveBeenCalledWith('/tmp/repo')
+  })
 })
 
 describe('runPost', () => {

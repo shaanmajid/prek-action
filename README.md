@@ -34,10 +34,26 @@ For v2 and earlier releases, major and minor tags such as `v2` and `v2.0` are mo
 | `extra_args` | Deprecated alias for `extra-args` | No | |
 | `prek-version` | Version or semver range to install, for example `0.2.30`, `0.3.x`, `<=1.0.0`, or `latest` | No | `latest` |
 | `install-only` | Install `prek` but skip `prek run` | No | `false` |
-| `working-directory` | Directory where `prek run` is executed | No | `.` |
+| `working-directory` | Directory where prek runs, including cache commands | No | `.` |
 | `show-verbose-logs` | Print the `prek` verbose log after `prek run` completes | No | `true` |
 | `cache` | Cache the prek environment between workflow runs | No | `true` |
 | `token` | Deprecated and unused; retained for backward compatibility | No | `''` |
+
+## Caching
+
+Caching uses `@actions/cache` to restore and save the prek environment directory.
+The cache key includes the runner OS, architecture, Python installation path (when
+set by `setup-python`), and `@actions/glob`'s `hashFiles` digest of
+`**/prek.toml`, `**/.pre-commit-config.yaml`, and `**/.pre-commit-config.yml` under
+`working-directory`. Unrelated file changes do not invalidate it.
+
+The toolkit hashes file contents, not filenames; moving an unchanged config may
+reuse a cache. Symbolic-link directories are not traversed. Empty matches use a
+`no-config` key suffix. The `prek-v2` cache namespace starts fresh after switching
+to the toolkit's hashing algorithm.
+
+Cache directory discovery, verbose logs, and cache pruning use the same working
+directory as `prek run`, including when `PREK_HOME` is relative.
 
 ## Outputs
 
