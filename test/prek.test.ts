@@ -29,7 +29,48 @@ vi.mock('@actions/exec', () => ({
   exec: toolkitMocks.exec,
 }))
 
-const { getPrekCacheDir, pruneCache } = await import('../src/prek')
+const { getPrekCacheDir, pruneCache, runPrek } = await import('../src/prek')
+
+describe('runPrek', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    toolkitMocks.exec.mockResolvedValue(0)
+  })
+
+  it('checks all files even when extra arguments are supplied', async () => {
+    await runPrek('/tmp/project', '--verbose', true)
+    expect(toolkitMocks.exec).toHaveBeenCalledWith(
+      'prek',
+      ['run', '--show-diff-on-failure', '--color=always', '--all-files', '--verbose'],
+      expect.objectContaining({ cwd: '/tmp/project', ignoreReturnCode: true }),
+    )
+  })
+
+  it('allows selected filenames and preserves argument quoting', async () => {
+    await runPrek('/tmp/project', '--files "file with spaces.txt" 中文', false)
+    expect(toolkitMocks.exec).toHaveBeenCalledWith(
+      'prek',
+      [
+        'run',
+        '--show-diff-on-failure',
+        '--color=always',
+        '--files',
+        'file with spaces.txt',
+        '中文',
+      ],
+      expect.any(Object),
+    )
+  })
+
+  it('leaves file selection to prek when disabled with no extra arguments', async () => {
+    await runPrek('/tmp/project', '', false)
+    expect(toolkitMocks.exec).toHaveBeenCalledWith(
+      'prek',
+      ['run', '--show-diff-on-failure', '--color=always'],
+      expect.any(Object),
+    )
+  })
+})
 
 describe('getPrekCacheDir', () => {
   beforeEach(() => {

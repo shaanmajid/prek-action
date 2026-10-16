@@ -28,16 +28,23 @@ describe('getInputs', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
-    mockContext.inputs = { cache: 'true', 'install-only': 'false', 'show-verbose-logs': 'true' }
+    mockContext.inputs = {
+      'all-files': 'true',
+      cache: 'true',
+      'install-only': 'false',
+      'show-verbose-logs': 'true',
+    }
     mockContext.warnings = []
   })
 
-  it('uses the configured extra-args default when no explicit value is provided', async () => {
-    mockContext.inputs['extra-args'] = '--all-files'
-
+  it('keeps all-files enabled independently of extra-args', async () => {
     const { getInputs } = await importInputsModule()
-
-    expect(getInputs().extraArgs).toBe('--all-files')
+    expect(getInputs().extraArgs).toBe('')
+    expect(getInputs().allFiles).toBe(true)
+    mockContext.inputs['extra-args'] = '--verbose'
+    expect(getInputs().allFiles).toBe(true)
+    mockContext.inputs['all-files'] = 'false'
+    expect(getInputs().allFiles).toBe(false)
   })
 
   it('preserves omitted prek-version so version-file can be selected', async () => {

@@ -8,6 +8,7 @@ export type Version = string & { readonly __brand: 'Version' }
 export type NormalizedVersion = `v${string}`
 
 export type Inputs = {
+  allFiles: boolean
   cache: boolean
   extraArgs: string
   installOnly: boolean

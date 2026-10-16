@@ -1,10 +1,14 @@
 name: prek-action
 description: Run pre-commit hooks using prek
 inputs:
+  all-files:
+    description: Run hooks against all files. Set false when selecting files with extra-args.
+    required: false
+    default: "true"
   extra-args:
     description: Extra options to pass to `prek run`, appended after `--show-diff-on-failure --color=always`
     required: false
-    default: "--all-files"
+    default: ""
   extra_args:
     description: Options to pass to `prek run` (deprecated, use extra-args)
     deprecationMessage: The extra_args input has been renamed to extra-args. Update your workflow.

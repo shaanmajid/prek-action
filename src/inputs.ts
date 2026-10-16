@@ -6,6 +6,7 @@ export function getInputs(): Inputs {
   const legacyExtraArgs = core.getInput('extra_args')
   const modernExtraArgs = core.getInput('extra-args')
   return {
+    allFiles: core.getBooleanInput('all-files'),
     cache: core.getBooleanInput('cache'),
     extraArgs: legacyExtraArgs || modernExtraArgs,
     installOnly: core.getBooleanInput('install-only'),

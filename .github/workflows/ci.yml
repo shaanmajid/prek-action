@@ -85,11 +85,13 @@ jobs:
       - name: Test | ${{ matrix.os }} | extra-args with CJK characters
         uses: ./
         with:
+          all-files: false
           extra-args: "--files 中文"
 
       - name: Test | ${{ matrix.os }} | extra-args with quoted string (with spaces)
         uses: ./
         with:
+          all-files: false
           extra-args: '--files "file with spaces.txt"'
 
       - name: Test | ${{ matrix.os }} | pin prek version
