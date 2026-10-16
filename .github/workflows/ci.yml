@@ -123,6 +123,27 @@ jobs:
           install-only: true
           cache: false
 
+      - name: Test | ${{ matrix.os }} | Poetry locked version
+        uses: ./
+        with:
+          version-file: test/fixtures/version-file/poetry.lock
+          install-only: true
+          cache: false
+
+      - name: Test | ${{ matrix.os }} | PDM locked version
+        uses: ./
+        with:
+          version-file: test/fixtures/version-file/pdm.lock
+          install-only: true
+          cache: false
+
+      - name: Test | ${{ matrix.os }} | Python standard locked version
+        uses: ./
+        with:
+          version-file: test/fixtures/version-file/pylock.toml
+          install-only: true
+          cache: false
+
   ecosystem-cpython:
     name: "ecosystem | cpython"
     timeout-minutes: 5
