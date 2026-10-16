@@ -154,6 +154,18 @@ describe('version-file', () => {
     ).rejects.toThrow('Unsupported prek source')
   })
 
+  it.each([
+    'prek==0.4.0',
+    'prek @ git+https://example.com/fork.git',
+  ])('rejects uv dependency overrides: %s', async override => {
+    await expect(
+      resolve(
+        'pyproject.toml',
+        `[project]\ndependencies = ["prek==0.3.5"]\n[tool.uv]\noverride-dependencies = ["${override}"]`,
+      ),
+    ).rejects.toThrow('dependency overrides')
+  })
+
   it('rejects Cargo.toml rather than partially implementing Cargo resolution', async () => {
     await expect(resolve('Cargo.toml', '[dependencies]\nprek = "0.3.5"')).rejects.toThrow(
       'Unsupported version-file',

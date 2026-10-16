@@ -55,7 +55,18 @@ function lockedVersion(data: Table, source: string, filename: string): string {
 }
 
 function pythonConstraint(data: Table, source: string): string {
-  const sources = table(table(table(data.tool).uv).sources)
+  const uv = table(table(data.tool).uv)
+  if (
+    Array.isArray(uv['override-dependencies']) &&
+    uv['override-dependencies'].some(
+      dep => typeof dep === 'string' && /^prek(?:\[[^\]]*\])?(?=\s|[<>=!~;(@]|$)/i.test(dep.trim()),
+    )
+  ) {
+    throw new Error(
+      `prek dependency overrides in ${source} are unsupported. Use uv.lock or set prek-version explicitly.`,
+    )
+  }
+  const sources = table(uv.sources)
   for (const [name, value] of Object.entries(sources)) {
     if (name.toLowerCase() !== 'prek') continue
     const entries = Array.isArray(value) ? value : [value]
