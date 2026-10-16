@@ -2,6 +2,10 @@
 
 Run [prek](https://github.com/j178/prek) in your GitHub Actions workflows.
 
+This branch documents the upcoming major release, including `all-files`,
+`version-file`, and `latest-known`. Those examples require the new release;
+basic usage examples below pin the latest published release.
+
 ## Usage
 
 ```yaml
@@ -13,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
+      - uses: j178/prek-action@1382ad72dea72f9d53832f2bcb65b3e87a947204 # v3.0.1
 ```
 
 `prek` is always invoked as:
@@ -55,7 +59,7 @@ Install and run against all files:
 ```yaml
 steps:
   - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
+  - uses: j178/prek-action@1382ad72dea72f9d53832f2bcb65b3e87a947204 # v3.0.1
 ```
 
 Pass extra arguments:
@@ -63,11 +67,8 @@ Pass extra arguments:
 `all-files` defaults to `true`, independently of `extra-args`.
 
 ```yaml
-steps:
-  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
-    with:
-      extra-args: '--directory packages/'
+with:
+  extra-args: '--directory packages/'
 ```
 
 ### Next-major migration: file selection
@@ -92,7 +93,7 @@ Pin a specific `prek` version:
 ```yaml
 steps:
   - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
+  - uses: j178/prek-action@1382ad72dea72f9d53832f2bcb65b3e87a947204 # v3.0.1
     with:
       prek-version: '0.2.30'
 ```
@@ -102,7 +103,7 @@ Resolve a semver range:
 ```yaml
 steps:
   - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
+  - uses: j178/prek-action@1382ad72dea72f9d53832f2bcb65b3e87a947204 # v3.0.1
     with:
       prek-version: '0.3.x'
 ```
@@ -160,7 +161,7 @@ Install only:
 ```yaml
 steps:
   - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
+  - uses: j178/prek-action@1382ad72dea72f9d53832f2bcb65b3e87a947204 # v3.0.1
     with:
       install-only: true
   - run: prek run --show-diff-on-failure --color=always --all-files
@@ -171,7 +172,7 @@ Disable verbose log output after the run:
 ```yaml
 steps:
   - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
+  - uses: j178/prek-action@1382ad72dea72f9d53832f2bcb65b3e87a947204 # v3.0.1
     with:
       show-verbose-logs: false
 ```
