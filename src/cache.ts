@@ -93,14 +93,34 @@ async function buildCacheKey(workingDirectory: string): Promise<string> {
 }
 
 async function hashConfigFiles(workingDirectory: string): Promise<string> {
-  const matcher = await glob.create(getConfigPatterns(workingDirectory).join('\n'))
+  const matcher = await glob.create(getConfigPatterns(workingDirectory).join('\n'), {
+    followSymbolicLinks: false,
+    implicitDescendants: false,
+    matchDirectories: false,
+  })
   const files = await matcher.glob()
-  if (files.length === 0) {
-    return 'no-config'
-  }
-
+  const root = await fs.realpath(workingDirectory)
   const digest = crypto.createHash('sha256')
+  let count = 0
   for (const file of files.sort()) {
+    // Glob does not traverse directory symlinks, but it can still return a
+    // symlink named like a config file. Hash only files inside this project.
+    let resolved: string
+    try {
+      resolved = await fs.realpath(file)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        continue
+      }
+      throw error
+    }
+    const relative = path.relative(root, resolved)
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      continue
+    }
+    if (!(await fs.stat(resolved)).isFile()) {
+      continue
+    }
     digest.update(path.relative(workingDirectory, file))
     digest.update('\0')
     digest.update(
@@ -109,8 +129,9 @@ async function hashConfigFiles(workingDirectory: string): Promise<string> {
         .update(await fs.readFile(file))
         .digest(),
     )
+    count++
   }
-  return digest.digest('hex')
+  return count === 0 ? 'no-config' : digest.digest('hex')
 }
 
 function getConfigPatterns(workingDirectory: string): string[] {

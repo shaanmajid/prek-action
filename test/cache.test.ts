@@ -1,12 +1,11 @@
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CACHE_KEY_STATE, CACHE_MATCHED_KEY_STATE, CACHE_PATHS_STATE } from '../src/types'
 
 const mockContext = vi.hoisted(() => ({
   cacheDir: '',
-  globFiles: [] as string[],
   state: {} as Record<string, string>,
   telemetry: {
     infos: [] as string[],
@@ -33,6 +32,7 @@ vi.mock('@actions/cache', () => ({
 }))
 
 vi.mock('@actions/core', () => ({
+  debug: vi.fn(),
   endGroup: vi.fn(),
   getState: vi.fn((name: string) => mockContext.state[name] ?? ''),
   info: vi.fn((message: string) => {
@@ -52,23 +52,23 @@ vi.mock('@actions/exec', () => ({
   exec: toolkitMocks.exec,
 }))
 
-vi.mock('@actions/glob', () => ({
-  create: vi.fn(async () => ({
-    glob: async () => mockContext.globFiles,
-  })),
-}))
-
 const { restorePrekCache, savePrekCache } = await import('../src/cache')
+
+const temporaryDirectories: string[] = []
 
 async function createWorkingDirectory(): Promise<string> {
   const workingDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'prek-action-cache-test-'))
+  temporaryDirectories.push(workingDirectory)
   await fs.writeFile(path.join(workingDirectory, 'prek.toml'), 'version = 1\n')
   return workingDirectory
 }
 
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map(dir => fs.rm(dir, { recursive: true })))
+})
+
 function resetMockContext(): void {
   mockContext.cacheDir = path.join(os.homedir(), '.cache', 'prek')
-  mockContext.globFiles = []
   mockContext.state = {}
   mockContext.telemetry.infos = []
   mockContext.telemetry.savedStateEntries = []
@@ -91,7 +91,6 @@ describe('restorePrekCache', () => {
   it('saves the matched key when restoreCache hits the primary key', async () => {
     const originalEnv = { ...process.env }
     const workingDirectory = await createWorkingDirectory()
-    mockContext.globFiles = [path.join(workingDirectory, 'prek.toml')]
 
     process.env.RUNNER_OS = 'Linux'
     process.env.RUNNER_ARCH = 'X64'
@@ -127,7 +126,6 @@ describe('restorePrekCache', () => {
 
   it('logs a cache miss without saving a matched key', async () => {
     const workingDirectory = await createWorkingDirectory()
-    mockContext.globFiles = [path.join(workingDirectory, 'prek.toml')]
 
     await restorePrekCache(workingDirectory)
 
@@ -137,6 +135,56 @@ describe('restorePrekCache', () => {
       `No cache found for key ${mockContext.state[CACHE_KEY_STATE]}`,
     ])
     expect(mockContext.telemetry.warnings).toEqual([])
+  })
+
+  it('hashes nested configs and their relative paths', async () => {
+    const workingDirectory = await createWorkingDirectory()
+    const baseline = await restorePrekCache(workingDirectory)
+    const nestedDirectory = path.join(workingDirectory, 'project')
+    await fs.mkdir(nestedDirectory)
+    const config = path.join(nestedDirectory, '.pre-commit-config.yaml')
+    await fs.writeFile(config, 'repos: []\n')
+    const nested = await restorePrekCache(workingDirectory)
+    expect(nested.primaryKey).not.toBe(baseline.primaryKey)
+
+    await fs.rename(config, path.join(nestedDirectory, '.pre-commit-config.yml'))
+    const renamed = await restorePrekCache(workingDirectory)
+    expect(renamed.primaryKey).not.toBe(nested.primaryKey)
+  })
+
+  it('ignores directories named like configs and their unrelated contents', async () => {
+    const workingDirectory = await createWorkingDirectory()
+    const baseline = await restorePrekCache(workingDirectory)
+    const directory = path.join(workingDirectory, '.pre-commit-config.yaml')
+    await fs.mkdir(directory)
+    await fs.writeFile(path.join(directory, 'unrelated.txt'), 'not a config\n')
+    expect((await restorePrekCache(workingDirectory)).primaryKey).toBe(baseline.primaryKey)
+  })
+
+  it.skipIf(process.platform === 'win32')('ignores external directory and file symlinks', async () => {
+    const workingDirectory = await createWorkingDirectory()
+    const external = await createWorkingDirectory()
+    const baseline = await restorePrekCache(workingDirectory)
+    await fs.symlink(external, path.join(workingDirectory, 'external'), 'dir')
+    await fs.symlink(
+      path.join(external, 'prek.toml'),
+      path.join(workingDirectory, '.pre-commit-config.yaml'),
+    )
+    await fs.symlink(
+      path.join(external, 'missing'),
+      path.join(workingDirectory, '.pre-commit-config.yml'),
+    )
+    expect((await restorePrekCache(workingDirectory)).primaryKey).toBe(baseline.primaryKey)
+  })
+
+  it.skipIf(process.platform === 'win32')('hashes file symlinks within the project', async () => {
+    const workingDirectory = await createWorkingDirectory()
+    const target = path.join(workingDirectory, 'hooks.yaml')
+    await fs.writeFile(target, 'repos: []\n')
+    await fs.symlink(target, path.join(workingDirectory, '.pre-commit-config.yaml'))
+    const baseline = await restorePrekCache(workingDirectory)
+    await fs.writeFile(target, 'repos: [{repo: local}]\n')
+    expect((await restorePrekCache(workingDirectory)).primaryKey).not.toBe(baseline.primaryKey)
   })
 })
 
