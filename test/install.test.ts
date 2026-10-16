@@ -9,6 +9,7 @@ import {
   getRustTargetFor,
   getToolCacheArchFor,
   hashFile,
+  installPrek,
   validateDownloadedChecksum,
 } from '../src/install'
 import { toVersion } from '../src/manifest'
@@ -21,6 +22,12 @@ vi.mock('@actions/core', async importOriginal => ({
 const testVersion = toVersion('1.2.3')
 
 describe('install helpers', () => {
+  it('refuses latest-known installation when the platform has no bundled checksum', async () => {
+    await expect(installPrek(testVersion, { requireChecksum: true })).rejects.toThrow(
+      /No bundled checksum/,
+    )
+  })
+
   it('getRustTargetFor maps supported runners to prek release targets', () => {
     expect(getRustTargetFor('linux', 'x64', 'gnu')).toBe('x86_64-unknown-linux-gnu')
     expect(getRustTargetFor('linux', 'arm64', 'gnu')).toBe('aarch64-unknown-linux-gnu')

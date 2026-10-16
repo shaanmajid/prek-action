@@ -12,9 +12,20 @@ import type { ManifestAsset, ReleaseAsset, Version } from './types'
 export type LinuxLibc = 'gnu' | 'musl'
 
 // Install a specific bare prek version, preferring the GitHub Actions tool cache when available.
-export async function installPrek(version: Version): Promise<string> {
+export async function installPrek(
+  version: Version,
+  { requireChecksum = false }: { requireChecksum?: boolean } = {},
+): Promise<string> {
   const linuxLibc = process.platform === 'linux' ? detectLinuxLibc() : 'gnu'
   const toolArch = getToolCacheArchFor(process.arch, linuxLibc)
+  if (requireChecksum) {
+    const asset = getReleaseAssetFor(process.platform, process.arch, linuxLibc)
+    if (!knownChecksumsByAsset.has(buildChecksumKey(version, asset.archiveName))) {
+      throw new Error(
+        `No bundled checksum for ${asset.archiveName} from prek ${version}; update the action pin or choose another prek-version`,
+      )
+    }
+  }
   const cachedTool = tc.find('prek', version, toolArch)
 
   core.startGroup(`Installing prek ${version}`)

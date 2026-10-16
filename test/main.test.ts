@@ -105,6 +105,17 @@ describe('run', () => {
     expect(mockContext.failures).toEqual([])
   })
 
+  it('requires a bundled checksum for latest-known', async () => {
+    mockContext.inputs.prekVersion = ' latest-known '
+    const { run } = await importMainModule()
+
+    await run()
+
+    expect(dependencyMocks.installPrek).toHaveBeenCalledWith('0.3.6', {
+      requireChecksum: true,
+    })
+  })
+
   it('skips cache restore and sets cache-hit=false when cache is disabled', async () => {
     mockContext.inputs.cache = false
 

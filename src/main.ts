@@ -15,7 +15,7 @@ export async function run(): Promise<void> {
   core.endGroup()
   core.setOutput('prek-version', normalizeVersion(version))
 
-  await installPrek(version)
+  await installPrek(version, { requireChecksum: inputs.prekVersion.trim() === 'latest-known' })
 
   if (inputs.cache) {
     const { matchedKey, primaryKey } = await restorePrekCache(inputs.workingDirectory)

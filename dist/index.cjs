@@ -69225,9 +69225,17 @@ function buildReleaseAssetUrl(version3, archiveName) {
 __name(buildReleaseAssetUrl, "buildReleaseAssetUrl");
 
 // src/install.ts
-async function installPrek(version3) {
+async function installPrek(version3, { requireChecksum = false } = {}) {
   const linuxLibc = process.platform === "linux" ? detectLinuxLibc() : "gnu";
   const toolArch = getToolCacheArchFor(process.arch, linuxLibc);
+  if (requireChecksum) {
+    const asset = getReleaseAssetFor(process.platform, process.arch, linuxLibc);
+    if (!knownChecksumsByAsset.has(buildChecksumKey(version3, asset.archiveName))) {
+      throw new Error(
+        `No bundled checksum for ${asset.archiveName} from prek ${version3}; update the action pin or choose another prek-version`
+      );
+    }
+  }
   const cachedTool = find("prek", version3, toolArch);
   startGroup(`Installing prek ${version3}`);
   try {
@@ -69429,7 +69437,7 @@ async function run() {
   info(`Using prek ${version3}`);
   endGroup();
   setOutput("prek-version", normalizeVersion(version3));
-  await installPrek(version3);
+  await installPrek(version3, { requireChecksum: inputs.prekVersion.trim() === "latest-known" });
   if (inputs.cache) {
     const { matchedKey, primaryKey } = await restorePrekCache(inputs.workingDirectory);
     setOutput("cache-hit", String(matchedKey === primaryKey));

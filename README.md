@@ -86,8 +86,7 @@ steps:
       prek-version: '0.3.x'
 ```
 
-In a release containing this feature, set the following input to install the newest
-stable `prek` version covered by this action's bundled checksums:
+Install the newest stable `prek` version covered by this action's bundled checksums:
 
 ```yaml
 with:
@@ -97,7 +96,8 @@ with:
 With `latest-known`, updating the action pin updates the selected `prek` version.
 Version selection and the official release URL come from the pinned action, without
 downloading the mutable version manifest. Downloads are verified against bundled
-SHA-256 checksums. The default remains `latest`, which follows new stable releases
+SHA-256 checksums; a missing platform checksum fails installation.
+The default remains `latest`, which follows new stable releases
 and warns when a download has no bundled checksum.
 
 Install only:
