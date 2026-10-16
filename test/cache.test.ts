@@ -181,7 +181,48 @@ describe('cache config hashing with @actions/glob', () => {
     const workingDirectory = await createWorkingDirectory()
     await fs.unlink(path.join(workingDirectory, 'prek.toml'))
     await fs.mkdir(path.join(workingDirectory, 'prek.toml'))
+    await fs.writeFile(path.join(workingDirectory, 'prek.toml', 'README.md'), 'not a config')
     expect((await restorePrekCache(workingDirectory)).primaryKey).toMatch(/\|no-config$/)
+  })
+
+  it.each([
+    'package[1]',
+    'package[',
+    'package]',
+    ...(process.platform === 'win32' ? [] : ['package*', 'package?', 'package\\name']),
+  ])('treats working directory %s literally', async name => {
+    const root = await createWorkingDirectory()
+    const workingDirectory = path.join(root, name)
+    await fs.mkdir(workingDirectory)
+    const config = path.join(workingDirectory, 'prek.toml')
+    await fs.writeFile(config, 'repos = []\n')
+    const first = await restorePrekCache(workingDirectory)
+    expect(first.primaryKey).not.toMatch(/\|no-config$/)
+    await fs.writeFile(config, 'repos = []\n# changed\n')
+    expect((await restorePrekCache(workingDirectory)).primaryKey).not.toBe(first.primaryKey)
+  })
+
+  it('hashes a symlinked working directory like its real directory', async () => {
+    if (process.platform === 'win32') return
+    const root = await createWorkingDirectory()
+    const target = await createWorkingDirectory()
+    const link = path.join(root, 'checkout')
+    await fs.symlink(target, link, 'dir')
+    const linked = await restorePrekCache(link)
+    expect(linked.primaryKey).not.toMatch(/\|no-config$/)
+    expect(linked.primaryKey).toBe((await restorePrekCache(target)).primaryKey)
+  })
+
+  it('hashes file symlink target contents', async () => {
+    if (process.platform === 'win32') return
+    const workingDirectory = await createWorkingDirectory()
+    const external = await createWorkingDirectory()
+    const target = path.join(external, 'config')
+    await fs.writeFile(target, 'repos = []\n')
+    await fs.symlink(target, path.join(workingDirectory, '.pre-commit-config.yaml'))
+    const first = await restorePrekCache(workingDirectory)
+    await fs.writeFile(target, 'repos = []\n# changed\n')
+    expect((await restorePrekCache(workingDirectory)).primaryKey).not.toBe(first.primaryKey)
   })
 
   it('does not traverse symbolic-link directories', async () => {

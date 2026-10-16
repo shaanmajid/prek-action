@@ -1,3 +1,4 @@
+import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as cache from '@actions/cache'
 import * as core from '@actions/core'
@@ -82,7 +83,7 @@ export async function savePrekCache(): Promise<void> {
 }
 
 async function buildCacheKey(workingDirectory: string): Promise<string> {
-  const normalizedWorkingDirectory = path.resolve(workingDirectory)
+  const normalizedWorkingDirectory = await fs.realpath(workingDirectory)
   const hash = await hashConfigFiles(normalizedWorkingDirectory)
   const pythonLocation = process.env.pythonLocation || ''
   const runnerOs = process.env.RUNNER_OS || process.platform
@@ -99,9 +100,13 @@ async function hashConfigFiles(workingDirectory: string): Promise<string> {
 }
 
 function getConfigPatterns(workingDirectory: string): string[] {
-  return [
-    path.join(workingDirectory, '**', 'prek.toml').replaceAll(path.sep, '/'),
-    path.join(workingDirectory, '**', '.pre-commit-config.yaml').replaceAll(path.sep, '/'),
-    path.join(workingDirectory, '**', '.pre-commit-config.yml').replaceAll(path.sep, '/'),
-  ]
+  const root = workingDirectory
+    .replaceAll(path.sep, '/')
+    .replaceAll('\\', '\\\\')
+    .replace(/[[*?]/g, '[$&]')
+  const patterns = ['prek.toml', '.pre-commit-config.yaml', '.pre-commit-config.yml'].map(
+    filename => `${root}/**/${filename}`,
+  )
+  // hashFiles implicitly includes descendants of matching directories.
+  return [...patterns, ...patterns.map(pattern => `!${pattern}/*`)]
 }

@@ -41,19 +41,14 @@ For v2 and earlier releases, major and minor tags such as `v2` and `v2.0` are mo
 
 ## Caching
 
-Caching uses `@actions/cache` to restore and save the prek environment directory.
-The cache key includes the runner OS, architecture, Python installation path (when
-set by `setup-python`), and `@actions/glob`'s `hashFiles` digest of
-`**/prek.toml`, `**/.pre-commit-config.yaml`, and `**/.pre-commit-config.yml` under
-`working-directory`. Unrelated file changes do not invalidate it.
+The prek environment cache is keyed by runner OS, architecture, Python installation
+path (when set by `setup-python`), and the contents of `prek.toml`,
+`.pre-commit-config.yaml`, and `.pre-commit-config.yml` files recursively under
+`working-directory`. Directory symlinks below that root are not traversed; file
+symlinks are hashed by their target contents.
 
-The toolkit hashes file contents, not filenames; moving an unchanged config may
-reuse a cache. Symbolic-link directories are not traversed. Empty matches use a
-`no-config` key suffix. The `prek-v2` cache namespace starts fresh after switching
-to the toolkit's hashing algorithm.
-
-Cache directory discovery, verbose logs, and cache pruning use the same working
-directory as `prek run`, including when `PREK_HOME` is relative.
+Cache commands and verbose logs use the same working directory as `prek run`,
+including when `PREK_HOME` is relative. Set `cache: false` to disable caching.
 
 ## Outputs
 
