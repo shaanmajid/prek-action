@@ -40,10 +40,10 @@ export async function run(): Promise<void> {
     exitCode = await runPrek(inputs.workingDirectory, inputs.extraArgs)
   } finally {
     if (inputs.showVerboseLogs) {
-      await showVerboseLogs()
+      await showVerboseLogs(inputs.workingDirectory)
     }
     if (exitCode === 0) {
-      await pruneCache()
+      await pruneCache(inputs.workingDirectory)
     }
   }
 
