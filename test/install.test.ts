@@ -1,7 +1,8 @@
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import * as core from '@actions/core'
+import { describe, expect, it, vi } from 'vitest'
 import {
   getBinaryPath,
   getReleaseAssetFor,
@@ -11,6 +12,11 @@ import {
   validateDownloadedChecksum,
 } from '../src/install'
 import { toVersion } from '../src/manifest'
+
+vi.mock('@actions/core', async importOriginal => ({
+  ...(await importOriginal<typeof import('@actions/core')>()),
+  warning: vi.fn(),
+}))
 
 const testVersion = toVersion('1.2.3')
 
@@ -116,6 +122,8 @@ describe('checksum helpers', () => {
   })
 
   it('validateDownloadedChecksum reports missing when no checksum is known for the asset', async () => {
+    const warning = vi.mocked(core.warning)
+    warning.mockClear()
     const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'prek-action-checksum-'))
     const archivePath = path.join(rootDir, 'prek.tar.gz')
     await fs.writeFile(archivePath, 'binary')
@@ -131,6 +139,9 @@ describe('checksum helpers', () => {
         new Map(),
       ),
     ).resolves.toBe('missing')
+    expect(warning).toHaveBeenCalledWith(
+      'Checksum is not known for 1.2.3:prek.tar.gz; skipping verification for prek 1.2.3',
+    )
   })
 
   it('validateDownloadedChecksum throws on checksum mismatch', async () => {
