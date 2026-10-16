@@ -40,6 +40,11 @@ function lockedEntry(filename: string, version: string, source?: string): string
 }
 
 describe('version-file', () => {
+  it('reads the lockfile used by the CI install smoke test', async () => {
+    const fixture = new URL('./fixtures/version-file/uv.lock', import.meta.url)
+    expect(await resolve('uv.lock', await fs.readFile(fixture, 'utf8'))).toBe('0.2.30')
+  })
+
   it.each([
     'uv.lock',
     'Cargo.lock',
