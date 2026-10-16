@@ -18,9 +18,11 @@ inputs:
     required: false
     default: "false"
   prek-version:
-    description: Version or semver range of prek to install (for example `0.2.1`, `0.3.x`, `<=1.0.0`, or `latest`)
+    description: Version or semver range of prek to install (for example `0.2.1`, `0.3.x`, `<=1.0.0`, or `latest`). Defaults to version-file when supplied, otherwise latest.
     required: false
-    default: "latest"
+  version-file:
+    description: Path to uv.lock, poetry.lock, pdm.lock, pylock.toml (or pylock.<name>.toml), pyproject.toml, or Cargo.lock containing a prek version. Relative to working-directory; prek-version takes precedence.
+    required: false
   show-verbose-logs:
     description: Whether to print the prek verbose log after `prek run`
     required: false

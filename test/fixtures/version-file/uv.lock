@@ -1,0 +1,6 @@
+version = 1
+
+[[package]]
+name = "prek"
+version = "0.2.30"
+source = { registry = "https://pypi.org/simple" }

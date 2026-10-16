@@ -1,0 +1,12 @@
+# Representative PEP 751 lockfile entry; artifacts are not installed by the action.
+lock-version = "1.0"
+requires-python = ">=3.11"
+created-by = "uv"
+
+[[packages]]
+name = "prek"
+version = "0.2.30"
+index = "https://pypi.org/simple"
+wheels = [
+    {url = "https://files.pythonhosted.org/prek-0.2.30-py3-none-manylinux_2_17_x86_64.whl", hashes = {sha256 = "0123456789abcdef"}},
+]

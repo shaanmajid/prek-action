@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Inputs } from '../src/types'
 
 const mockContext = vi.hoisted(() => ({
   failures: [] as string[],
@@ -7,8 +8,9 @@ const mockContext = vi.hoisted(() => ({
     installOnly: false,
     prekVersion: 'latest',
     showVerboseLogs: false,
+    versionFile: '',
     workingDirectory: '/tmp/repo',
-  },
+  } as Inputs,
   outputs: [] as Array<[string, string]>,
   restoreResult: {
     matchedKey: 'prek-v1|0.3.6|Linux|X64|/opt/python|hash',
@@ -37,6 +39,7 @@ const dependencyMocks = vi.hoisted(() => ({
   normalizeVersion: vi.fn((version: string) => `v${version.replace(/^v/, '')}`),
   pruneCache: vi.fn(async () => {}),
   resolveVersion: vi.fn(async () => '0.3.6'),
+  resolveVersionFile: vi.fn(async () => '0.3.5'),
   restorePrekCache: vi.fn(async () => mockContext.restoreResult),
   runPrek: vi.fn(async () => 0),
   savePrekCache: vi.fn(async () => {}),
@@ -58,6 +61,9 @@ vi.mock('../src/manifest', () => ({
   normalizeVersion: dependencyMocks.normalizeVersion,
   resolveVersion: dependencyMocks.resolveVersion,
 }))
+vi.mock('../src/version-file', () => ({
+  resolveVersionFile: dependencyMocks.resolveVersionFile,
+}))
 vi.mock('../src/prek', () => ({
   pruneCache: dependencyMocks.pruneCache,
   runPrek: dependencyMocks.runPrek,
@@ -77,6 +83,7 @@ function resetMockContext(): void {
     installOnly: false,
     prekVersion: 'latest',
     showVerboseLogs: false,
+    versionFile: '',
     workingDirectory: '/tmp/repo',
   }
   mockContext.outputs = []
@@ -91,6 +98,30 @@ describe('run', () => {
     vi.resetModules()
     vi.clearAllMocks()
     resetMockContext()
+  })
+
+  it('reads version-file relative to working-directory when no version is supplied', async () => {
+    mockContext.inputs.prekVersion = ''
+    mockContext.inputs.versionFile = 'uv.lock'
+    const { run } = await importMainModule()
+    await run()
+    expect(dependencyMocks.resolveVersionFile).toHaveBeenCalledWith('/tmp/repo/uv.lock')
+    expect(dependencyMocks.resolveVersion).toHaveBeenCalledWith('0.3.5')
+  })
+
+  it('lets explicit latest override version-file', async () => {
+    mockContext.inputs.versionFile = 'uv.lock'
+    const { run } = await importMainModule()
+    await run()
+    expect(dependencyMocks.resolveVersionFile).not.toHaveBeenCalled()
+    expect(dependencyMocks.resolveVersion).toHaveBeenCalledWith('latest')
+  })
+
+  it('defaults to latest without a version or version-file', async () => {
+    mockContext.inputs.prekVersion = ''
+    const { run } = await importMainModule()
+    await run()
+    expect(dependencyMocks.resolveVersion).toHaveBeenCalledWith('latest')
   })
 
   it('sets cache-hit when the restored cache key matches the primary key', async () => {

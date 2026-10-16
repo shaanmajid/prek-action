@@ -11,7 +11,7 @@
     "update-known-versions": "node scripts/update-known-versions.mjs"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=24.10.0"
   },
   "dependencies": {
     "@actions/cache": "^6.0.0",
@@ -21,8 +21,10 @@
     "@actions/http-client": "^4.0.0",
     "@actions/io": "^3.0.0",
     "@actions/tool-cache": "^4.0.0",
+    "@renovatebot/pep440": "^5.0.0",
     "detect-libc": "^2.1.2",
     "semver": "^7.7.4",
+    "smol-toml": "^1.8.0",
     "string-argv": "^0.3.2"
   },
   "devDependencies": {

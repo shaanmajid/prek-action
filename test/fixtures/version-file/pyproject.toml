@@ -1,0 +1,2 @@
+[dependency-groups]
+lint = ["prek>=0.2.30,<=0.2.30"]

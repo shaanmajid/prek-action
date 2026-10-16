@@ -123,7 +123,7 @@ async function downloadVersionManifest(): Promise<VersionManifest> {
   return JSON.parse(rawManifest) as VersionManifest
 }
 
-async function getVersionManifest(): Promise<VersionManifest> {
+export async function getVersionManifest(): Promise<VersionManifest> {
   versionManifestPromise ??= downloadVersionManifest()
 
   try {

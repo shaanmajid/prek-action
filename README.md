@@ -32,7 +32,8 @@ For v2 and earlier releases, major and minor tags such as `v2` and `v2.0` are mo
 | --- | --- | --- | --- |
 | `extra-args` | Additional arguments appended to `prek run --show-diff-on-failure --color=always` | No | `--all-files` |
 | `extra_args` | Deprecated alias for `extra-args` | No | |
-| `prek-version` | Version or semver range to install, for example `0.2.30`, `0.3.x`, `<=1.0.0`, or `latest` | No | `latest` |
+| `prek-version` | Version or semver range to install, for example `0.2.30`, `0.3.x`, `<=1.0.0`, or `latest`; overrides `version-file` | No | `version-file` if supplied, otherwise `latest` |
+| `version-file` | Read prek's version from `uv.lock`, `poetry.lock`, `pdm.lock`, `pylock.toml` (including `pylock.<name>.toml`), `pyproject.toml`, or `Cargo.lock`, relative to `working-directory` | No | |
 | `install-only` | Install `prek` but skip `prek run` | No | `false` |
 | `working-directory` | Directory where `prek run` is executed | No | `.` |
 | `show-verbose-logs` | Print the `prek` verbose log after `prek run` completes | No | `true` |
@@ -85,6 +86,42 @@ steps:
     with:
       prek-version: '0.3.x'
 ```
+
+Reuse a project version by configuring the action step (requires a release containing
+the new `version-file` input):
+
+```yaml
+with:
+  version-file: uv.lock
+```
+
+`prek-version` takes precedence, including an explicit `latest`. If neither input is
+set, the action installs the latest version. Files are read only when explicitly
+selected; relative paths start at `working-directory`.
+
+Lockfiles must contain one unique prek version from a package registry. Git, URL,
+and local sources are unsupported. Poetry and PDM index packages are supported,
+including registry mirrors. Pylock files must use format major version 1 and record
+prek's exact version with release wheels or an sdist by HTTP(S) URL. Local artifact paths,
+VCS, directory, and archive sources are unsupported. Artifact URLs and hashes are
+not used: the action downloads the official prek binary for that version.
+
+`pyproject.toml` supports prek in
+`project.dependencies`, `project.optional-dependencies`, and `dependency-groups`,
+using PEP 440 specifiers. Direct URL dependencies and uv source overrides other
+than an unconditional index selection are unsupported.
+Prek entries in uv's `override-dependencies` are also unsupported; use `uv.lock`
+or set `prek-version` explicitly instead.
+
+Inference selects an official prek release version; it does not install the
+project's Python or Rust dependencies, or reproduce packages from other sources.
+
+Manifest requirements select the highest matching stable release. Distinct
+constraints across dependency groups and conditional Python dependencies require
+an explicit `prek-version` or an unambiguous lockfile. The action does not resolve
+Python environment markers or search other files.
+Missing or malformed files, missing prek entries, and unsupported or ambiguous
+requirements fail with an error; they never fall back to installing latest.
 
 Install only:
 

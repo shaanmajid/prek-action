@@ -1,3 +1,4 @@
+import * as path from 'node:path'
 import * as core from '@actions/core'
 import { restorePrekCache, savePrekCache } from './cache'
 import { getInputs } from './inputs'
@@ -5,12 +6,18 @@ import { installPrek } from './install'
 import { normalizeVersion, resolveVersion } from './manifest'
 import { pruneCache, runPrek, showVerboseLogs } from './prek'
 import { POST_ACTION_STATE } from './types'
+import { resolveVersionFile } from './version-file'
 
 export async function run(): Promise<void> {
   const inputs = getInputs()
 
   core.startGroup('Resolving prek version')
-  const version = await resolveVersion(inputs.prekVersion)
+  const versionInput =
+    inputs.prekVersion ||
+    (inputs.versionFile
+      ? await resolveVersionFile(path.resolve(inputs.workingDirectory, inputs.versionFile))
+      : 'latest')
+  const version = await resolveVersion(versionInput)
   core.info(`Using prek ${version}`)
   core.endGroup()
   core.setOutput('prek-version', normalizeVersion(version))
