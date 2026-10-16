@@ -34,7 +34,13 @@ jobs:
           package-manager-cache: false
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
+
+      - name: Verify dependency signatures
+        run: npm audit signatures
+
+      - name: Check TypeScript
+        run: npm run build
 
       - name: Run unit tests
         run: npm test

@@ -6,10 +6,12 @@
 2. Install dependencies:
 
 ```bash
-npm ci
+npm ci --ignore-scripts
 ```
 
-If you are bootstrapping from scratch and no lockfile exists yet, run `npm install` once, then commit the generated `package-lock.json`.
+If you are bootstrapping from scratch and no lockfile exists yet, run `npm install --ignore-scripts` once, then commit the generated `package-lock.json`.
+
+Verify registry signatures and available provenance attestations with `npm audit signatures`.
 
 ## Build
 
@@ -55,7 +57,7 @@ git diff --stat
 ## Release
 
 1. Make the source changes.
-2. Run `npm ci`.
+2. Run `npm ci --ignore-scripts` and `npm audit signatures`.
 3. Run `npm test`.
 4. Run `npm run bundle`.
 5. Commit both source files and the generated `dist/` output.
