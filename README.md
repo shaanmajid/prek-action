@@ -136,6 +136,8 @@ and local sources are unsupported. `pyproject.toml` supports prek in
 `project.dependencies`, `project.optional-dependencies`, and `dependency-groups`,
 using PEP 440 specifiers. Direct URL dependencies and uv source overrides other
 than an unconditional index selection are unsupported.
+Prek entries in uv's `override-dependencies` are also unsupported; use `uv.lock`
+or set `prek-version` explicitly instead.
 
 Inference selects an official prek release version; it does not install the
 project's Python or Rust dependencies, or reproduce packages from other sources.
