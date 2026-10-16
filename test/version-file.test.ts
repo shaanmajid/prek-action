@@ -43,6 +43,11 @@ describe('version-file', () => {
 
   it('accepts an exact Python pin newer than the manifest', async () => {
     expect(await resolve('pyproject.toml', '[dependency-groups]\nlint = ["prek==9.0.0"]')).toBe('9.0.0')
+    expect(await resolve('pyproject.toml', '[dependency-groups]\nlint = ["prek == 9.0.0"]')).toBe('9.0.0')
+  })
+
+  it('accepts parenthesized Python version specifiers', async () => {
+    expect(await resolve('pyproject.toml', '[dependency-groups]\nlint = ["prek (>=0.3.0,<0.4)"]')).toBe('0.3.9')
   })
 
   it('does not confuse similarly named dependencies or uv required-version with prek', async () => {

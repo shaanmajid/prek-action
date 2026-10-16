@@ -42,7 +42,7 @@ function pythonConstraint(data: Table, source: string): string {
     if (typeof dep !== 'string') return []
     const match = dep.match(/^prek(?:\[[^\]]*\])?\s*(?=[<>=!~;(]|$)(.*)$/i)
     if (!match) return []
-    const constraint = match[1]!.trim()
+    const constraint = match[1]!.trim().replace(/^\((.*)\)$/, '$1').trim()
     if (constraint.includes(';')) {
       throw new Error(`Conditional prek dependencies in ${source} are unsupported. Use uv.lock or set prek-version explicitly.`)
     }
@@ -101,7 +101,7 @@ export async function resolveVersionFile(filePath: string): Promise<string> {
 
   const python = filename === 'pyproject.toml'
   const constraint = python ? pythonConstraint(data, filePath) : cargoConstraint(data, filePath)
-  const exact = constraint.match(python ? /^==([\d.]+)$/ : /^=([\d.]+)$/)?.[1]
+  const exact = constraint.match(python ? /^==\s*([^,\s]+)$/ : /^=\s*([^,\s]+)$/)?.[1]
   if (exact && semver.valid(exact)) return exact
   const range = python ? constraint : cargoRange(constraint)
   if (!python && !semver.validRange(range)) {
