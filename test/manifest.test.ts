@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Version, VersionManifest } from '../src/types'
 
 const mockContext = vi.hoisted(() => ({
-  inputs: {} as Record<string, string>,
   checksums: new Map<string, string>(),
+  inputs: {} as Record<string, string>,
 }))
 
 vi.mock('../src/known-checksums', () => ({
@@ -63,7 +63,10 @@ describe('manifest helpers', () => {
     mockContext.checksums.clear()
     mockContext.checksums.set('0.3.4:prek-x86_64-unknown-linux-gnu.tar.gz', 'older-digest')
     mockContext.checksums.set('0.3.5:prek-x86_64-unknown-linux-gnu.tar.gz', 'digest')
-    mockContext.checksums.set('0.4.0-beta.1:prek-x86_64-unknown-linux-gnu.tar.gz', 'prerelease-digest')
+    mockContext.checksums.set(
+      '0.4.0-beta.1:prek-x86_64-unknown-linux-gnu.tar.gz',
+      'prerelease-digest',
+    )
   })
 
   it('latest-known selects the highest stable bundled version without a manifest download', async () => {

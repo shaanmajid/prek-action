@@ -10,8 +10,8 @@ export function getInputs(): Inputs {
     extraArgs: legacyExtraArgs || modernExtraArgs,
     installOnly: core.getBooleanInput('install-only'),
     prekVersion: core.getInput('prek-version'),
-    versionFile: core.getInput('version-file'),
     showVerboseLogs: core.getBooleanInput('show-verbose-logs'),
+    versionFile: core.getInput('version-file'),
     workingDirectory: core.getInput('working-directory') || '.',
   }
 }

@@ -7,8 +7,8 @@ const mockContext = vi.hoisted(() => ({
     extraArgs: '--all-files',
     installOnly: false,
     prekVersion: 'latest',
-    versionFile: '',
     showVerboseLogs: false,
+    versionFile: '',
     workingDirectory: '/tmp/repo',
   } as Inputs,
   outputs: [] as Array<[string, string]>,
@@ -82,8 +82,8 @@ function resetMockContext(): void {
     extraArgs: '--all-files',
     installOnly: false,
     prekVersion: 'latest',
-    versionFile: '',
     showVerboseLogs: false,
+    versionFile: '',
     workingDirectory: '/tmp/repo',
   }
   mockContext.outputs = []

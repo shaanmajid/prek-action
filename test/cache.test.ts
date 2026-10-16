@@ -161,21 +161,24 @@ describe('restorePrekCache', () => {
     expect((await restorePrekCache(workingDirectory)).primaryKey).toBe(baseline.primaryKey)
   })
 
-  it.skipIf(process.platform === 'win32')('ignores external directory and file symlinks', async () => {
-    const workingDirectory = await createWorkingDirectory()
-    const external = await createWorkingDirectory()
-    const baseline = await restorePrekCache(workingDirectory)
-    await fs.symlink(external, path.join(workingDirectory, 'external'), 'dir')
-    await fs.symlink(
-      path.join(external, 'prek.toml'),
-      path.join(workingDirectory, '.pre-commit-config.yaml'),
-    )
-    await fs.symlink(
-      path.join(external, 'missing'),
-      path.join(workingDirectory, '.pre-commit-config.yml'),
-    )
-    expect((await restorePrekCache(workingDirectory)).primaryKey).toBe(baseline.primaryKey)
-  })
+  it.skipIf(process.platform === 'win32')(
+    'ignores external directory and file symlinks',
+    async () => {
+      const workingDirectory = await createWorkingDirectory()
+      const external = await createWorkingDirectory()
+      const baseline = await restorePrekCache(workingDirectory)
+      await fs.symlink(external, path.join(workingDirectory, 'external'), 'dir')
+      await fs.symlink(
+        path.join(external, 'prek.toml'),
+        path.join(workingDirectory, '.pre-commit-config.yaml'),
+      )
+      await fs.symlink(
+        path.join(external, 'missing'),
+        path.join(workingDirectory, '.pre-commit-config.yml'),
+      )
+      expect((await restorePrekCache(workingDirectory)).primaryKey).toBe(baseline.primaryKey)
+    },
+  )
 
   it.skipIf(process.platform === 'win32')('hashes file symlinks within the project', async () => {
     const workingDirectory = await createWorkingDirectory()

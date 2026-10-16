@@ -18,11 +18,11 @@ const toolkitMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@actions/core', () => ({
-  startGroup: vi.fn(),
   endGroup: vi.fn(),
   info: vi.fn((message: string) => {
     mockContext.infos.push(message)
   }),
+  startGroup: vi.fn(),
 }))
 
 vi.mock('@actions/exec', () => ({
