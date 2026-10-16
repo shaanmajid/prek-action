@@ -39,6 +39,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Verify dependency signatures
+        run: npm audit signatures
       - name: Build
         run: npm run build
       - name: Run unit tests

@@ -36,6 +36,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify dependency signatures
+        run: npm audit signatures
+
+      - name: Check TypeScript
+        run: npm run build
+
       - name: Run unit tests
         run: npm test
 

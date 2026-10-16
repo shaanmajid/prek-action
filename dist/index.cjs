@@ -1998,10 +1998,66 @@ var require_request = __commonJS({
           return false;
         }
       }
-      onUpgrade(statusCode, headers, socket) {
+      /**
+       * @param {number|null} statusCode
+       * @param {Buffer[]|null} headers
+       * @param {import('node:stream').Duplex} socket
+       * @param {string} [statusText]
+       */
+      onUpgrade(statusCode, headers, socket, statusText = "") {
+        this.onFinally();
         assert7(!this.aborted);
         assert7(!this.completed);
-        return this[kHandler].onUpgrade(statusCode, headers, socket);
+        if (statusCode !== null) {
+          this.#publishUpgradeHeaders(statusCode, headers, statusText);
+        }
+        const result = this[kHandler].onUpgrade(statusCode, headers, socket);
+        if (!this.aborted) {
+          this.completed = true;
+          if (statusCode !== null) {
+            this.#publishUpgradeTrailers();
+          }
+        }
+        return result;
+      }
+      /**
+       * @param {number} statusCode
+       * @param {import('node:http2').IncomingHttpHeaders} headers
+       * @param {(headers: import('node:http2').IncomingHttpHeaders) => Buffer[]} parseHeaders
+       * @param {string} [statusText]
+       */
+      onUpgradeResponse(statusCode, headers, parseHeaders, statusText = "") {
+        assert7(!this.aborted);
+        assert7(this.completed);
+        if (channels.headers.hasSubscribers) {
+          this.#publishUpgradeHeaders(statusCode, parseHeaders(headers), statusText);
+        }
+        this.#publishUpgradeTrailers();
+      }
+      /**
+       * @param {Error} error
+       */
+      onUpgradeError(error2) {
+        assert7(!this.aborted);
+        assert7(this.completed);
+        if (channels.error.hasSubscribers) {
+          channels.error.publish({ request: this, error: error2 });
+        }
+      }
+      /**
+       * @param {number} statusCode
+       * @param {Buffer[]} headers
+       * @param {string} statusText
+       */
+      #publishUpgradeHeaders(statusCode, headers, statusText) {
+        if (channels.headers.hasSubscribers) {
+          channels.headers.publish({ request: this, response: { statusCode, headers, statusText } });
+        }
+      }
+      #publishUpgradeTrailers() {
+        if (channels.trailers.hasSubscribers) {
+          channels.trailers.publish({ request: this, trailers: [] });
+        }
       }
       onComplete(trailers) {
         this.onFinally();
@@ -2068,7 +2124,11 @@ var require_request = __commonJS({
           } else if (typeof val[i] === "object") {
             throw new InvalidArgumentError(`invalid ${key} header`);
           } else {
-            arr.push(`${val[i]}`);
+            const str = `${val[i]}`;
+            if (!isValidHeaderValue(str)) {
+              throw new InvalidArgumentError(`invalid ${key} header`);
+            }
+            arr.push(str);
           }
         }
         val = arr;
@@ -2080,6 +2140,9 @@ var require_request = __commonJS({
         val = "";
       } else {
         val = `${val}`;
+        if (!isValidHeaderValue(val)) {
+          throw new InvalidArgumentError(`invalid ${key} header`);
+        }
       }
       if (headerName === "host") {
         if (request.host !== null) {
@@ -2186,6 +2249,7 @@ var require_dispatcher = __commonJS({
 var require_dispatcher_base = __commonJS({
   "node_modules/undici/lib/dispatcher/dispatcher-base.js"(exports2, module2) {
     "use strict";
+    var buffer3 = require("node:buffer");
     var Dispatcher = require_dispatcher();
     var {
       ClientDestroyedError,
@@ -2196,16 +2260,31 @@ var require_dispatcher_base = __commonJS({
     var kOnDestroyed = /* @__PURE__ */ Symbol("onDestroyed");
     var kOnClosed = /* @__PURE__ */ Symbol("onClosed");
     var kInterceptedDispatch = /* @__PURE__ */ Symbol("Intercepted Dispatch");
+    var kWebSocketOptions = /* @__PURE__ */ Symbol("webSocketOptions");
+    var kEventSourceOptions = /* @__PURE__ */ Symbol("eventSourceOptions");
     var DispatcherBase = class extends Dispatcher {
       static {
         __name(this, "DispatcherBase");
       }
-      constructor() {
+      constructor(opts) {
         super();
         this[kDestroyed] = false;
         this[kOnDestroyed] = null;
         this[kClosed] = false;
         this[kOnClosed] = [];
+        this[kWebSocketOptions] = opts?.webSocket ?? {};
+        this[kEventSourceOptions] = opts?.eventSource ?? {};
+      }
+      get webSocketOptions() {
+        return {
+          maxFragments: this[kWebSocketOptions].maxFragments ?? 131072,
+          maxPayloadSize: this[kWebSocketOptions].maxPayloadSize ?? 128 * 1024 * 1024
+        };
+      }
+      get eventSourceOptions() {
+        return {
+          maxEventSize: this[kEventSourceOptions].maxEventSize ?? buffer3.kStringMaxLength
+        };
       }
       get destroyed() {
         return this[kDestroyed];
@@ -5941,6 +6020,7 @@ var require_client_h1 = __commonJS({
       RequestContentLengthMismatchError,
       ResponseContentLengthMismatchError,
       RequestAbortedError,
+      InvalidArgumentError,
       HeadersTimeoutError,
       HeadersOverflowError,
       SocketError,
@@ -5987,6 +6067,9 @@ var require_client_h1 = __commonJS({
     var FastBuffer = Buffer[Symbol.species];
     var addListener = util6.addListener;
     var removeAllListeners = util6.removeAllListeners;
+    var kIdleSocketValidation = /* @__PURE__ */ Symbol("kIdleSocketValidation");
+    var kIdleSocketValidationTimeout = /* @__PURE__ */ Symbol("kIdleSocketValidationTimeout");
+    var kSocketUsed = /* @__PURE__ */ Symbol("kSocketUsed");
     var extractBody;
     async function lazyllhttp() {
       const llhttpWasmData = process.env.JEST_WORKER_ID ? require_llhttp_wasm() : void 0;
@@ -6153,23 +6236,54 @@ var require_client_h1 = __commonJS({
             currentBufferRef = null;
           }
           const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr;
-          if (ret === constants4.ERROR.PAUSED_UPGRADE) {
-            this.onUpgrade(data.slice(offset));
-          } else if (ret === constants4.ERROR.PAUSED) {
-            this.paused = true;
-            socket.unshift(data.slice(offset));
-          } else if (ret !== constants4.ERROR.OK) {
-            const ptr = llhttp.llhttp_get_error_reason(this.ptr);
-            let message = "";
-            if (ptr) {
-              const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
-              message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
+          if (ret !== constants4.ERROR.OK) {
+            const body2 = data.subarray(offset);
+            if (ret === constants4.ERROR.PAUSED_UPGRADE) {
+              this.onUpgrade(body2);
+            } else if (ret === constants4.ERROR.PAUSED) {
+              this.paused = true;
+              socket.unshift(body2);
+            } else {
+              throw this.createError(ret, body2);
             }
-            throw new HTTPParserError(message, constants4.ERROR[ret], data.slice(offset));
           }
         } catch (err) {
           util6.destroy(socket, err);
         }
+      }
+      finish() {
+        assert7(currentParser === null);
+        assert7(this.ptr != null);
+        assert7(!this.paused);
+        const { llhttp } = this;
+        let ret;
+        try {
+          currentParser = this;
+          ret = llhttp.llhttp_finish(this.ptr);
+        } finally {
+          currentParser = null;
+        }
+        if (ret === constants4.ERROR.OK) {
+          return null;
+        }
+        if (ret === constants4.ERROR.PAUSED || ret === constants4.ERROR.PAUSED_UPGRADE) {
+          this.paused = true;
+          return null;
+        }
+        return this.createError(ret, EMPTY_BUF);
+      }
+      createError(ret, data) {
+        const { llhttp, contentLength: contentLength2, bytesRead } = this;
+        if (contentLength2 && bytesRead !== parseInt(contentLength2, 10)) {
+          return new ResponseContentLengthMismatchError();
+        }
+        const ptr = llhttp.llhttp_get_error_reason(this.ptr);
+        let message = "";
+        if (ptr) {
+          const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
+          message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
+        }
+        return new HTTPParserError(message, constants4.ERROR[ret], data);
       }
       destroy() {
         assert7(this.ptr != null);
@@ -6188,6 +6302,10 @@ var require_client_h1 = __commonJS({
       onMessageBegin() {
         const { socket, client } = this;
         if (socket.destroyed) {
+          return -1;
+        }
+        if (client[kRunning] === 0) {
+          util6.destroy(socket, new SocketError("bad response", util6.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -6233,7 +6351,7 @@ var require_client_h1 = __commonJS({
         }
       }
       onUpgrade(head) {
-        const { upgrade, client, socket, headers, statusCode } = this;
+        const { upgrade, client, socket, headers, statusCode, statusText } = this;
         assert7(upgrade);
         assert7(client[kSocket] === socket);
         assert7(!socket.destroyed);
@@ -6258,15 +6376,20 @@ var require_client_h1 = __commonJS({
         client[kQueue][client[kRunningIdx]++] = null;
         client.emit("disconnect", client[kUrl], [client], new InformationalError("upgrade"));
         try {
-          request.onUpgrade(statusCode, headers, socket);
-        } catch (err) {
-          util6.destroy(socket, err);
+          request.onUpgrade(statusCode, headers, socket, statusText);
+        } catch (error2) {
+          util6.errorRequest(client, request, error2);
+          util6.destroy(socket, error2);
         }
         client[kResume]();
       }
       onHeadersComplete(statusCode, upgrade, shouldKeepAlive) {
         const { client, socket, headers, statusText } = this;
         if (socket.destroyed) {
+          return -1;
+        }
+        if (client[kRunning] === 0) {
+          util6.destroy(socket, new SocketError("bad response", util6.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -6394,6 +6517,7 @@ var require_client_h1 = __commonJS({
         }
         request.onComplete(headers);
         client[kQueue][client[kRunningIdx]++] = null;
+        socket[kSocketUsed] = true;
         if (socket[kWriting]) {
           assert7(client[kRunning] === 0);
           util6.destroy(socket, new InformationalError("reset"));
@@ -6438,12 +6562,18 @@ var require_client_h1 = __commonJS({
       socket[kWriting] = false;
       socket[kReset] = false;
       socket[kBlocking] = false;
+      socket[kIdleSocketValidation] = 0;
+      socket[kIdleSocketValidationTimeout] = null;
+      socket[kSocketUsed] = false;
       socket[kParser] = new Parser(client, socket, llhttpInstance);
       addListener(socket, "error", function(err) {
-        assert7(err.code !== "ERR_TLS_CERT_ALTNAME_INVALID");
         const parser = this[kParser];
         if (err.code === "ECONNRESET" && parser.statusCode && !parser.shouldKeepAlive) {
-          parser.onMessageComplete();
+          const parserErr = parser.finish();
+          if (parserErr) {
+            this[kError] = parserErr;
+            this[kClient][kOnError](parserErr);
+          }
           return;
         }
         this[kError] = err;
@@ -6458,7 +6588,10 @@ var require_client_h1 = __commonJS({
       addListener(socket, "end", function() {
         const parser = this[kParser];
         if (parser.statusCode && !parser.shouldKeepAlive) {
-          parser.onMessageComplete();
+          const parserErr = parser.finish();
+          if (parserErr) {
+            util6.destroy(this, parserErr);
+          }
           return;
         }
         util6.destroy(this, new SocketError("other side closed", util6.getSocketInfo(this)));
@@ -6466,9 +6599,10 @@ var require_client_h1 = __commonJS({
       addListener(socket, "close", function() {
         const client2 = this[kClient];
         const parser = this[kParser];
+        clearIdleSocketValidation(this);
         if (parser) {
           if (!this[kError] && parser.statusCode && !parser.shouldKeepAlive) {
-            parser.onMessageComplete();
+            this[kError] = parser.finish() || this[kError];
           }
           this[kParser].destroy();
           this[kParser] = null;
@@ -6517,7 +6651,7 @@ var require_client_h1 = __commonJS({
           return socket.destroyed;
         },
         busy(request) {
-          if (socket[kWriting] || socket[kReset] || socket[kBlocking]) {
+          if (socket[kWriting] || socket[kReset] || socket[kBlocking] || socket[kIdleSocketValidation] === 1) {
             return true;
           }
           if (request) {
@@ -6536,6 +6670,25 @@ var require_client_h1 = __commonJS({
       };
     }
     __name(connectH1, "connectH1");
+    function clearIdleSocketValidation(socket) {
+      if (socket[kIdleSocketValidationTimeout]) {
+        clearImmediate(socket[kIdleSocketValidationTimeout]);
+        socket[kIdleSocketValidationTimeout] = null;
+      }
+      socket[kIdleSocketValidation] = 0;
+    }
+    __name(clearIdleSocketValidation, "clearIdleSocketValidation");
+    function scheduleIdleSocketValidation(client, socket) {
+      socket[kIdleSocketValidation] = 1;
+      socket[kIdleSocketValidationTimeout] = setImmediate(() => {
+        socket[kIdleSocketValidationTimeout] = null;
+        socket[kIdleSocketValidation] = 2;
+        if (client[kSocket] === socket && !socket.destroyed) {
+          client[kResume]();
+        }
+      });
+    }
+    __name(scheduleIdleSocketValidation, "scheduleIdleSocketValidation");
     function resumeH1(client) {
       const socket = client[kSocket];
       if (socket && !socket.destroyed) {
@@ -6547,6 +6700,29 @@ var require_client_h1 = __commonJS({
         } else if (socket[kNoRef] && socket.ref) {
           socket.ref();
           socket[kNoRef] = false;
+        }
+        if (client[kRunning] === 0 && client[kPending] > 0 && socket[kSocketUsed]) {
+          if (socket[kIdleSocketValidation] === 0) {
+            scheduleIdleSocketValidation(client, socket);
+            socket[kParser].readMore();
+            if (socket.destroyed) {
+              return;
+            }
+            return;
+          }
+          if (socket[kIdleSocketValidation] === 1) {
+            socket[kParser].readMore();
+            if (socket.destroyed) {
+              return;
+            }
+            return;
+          }
+        }
+        if (client[kRunning] === 0) {
+          socket[kParser].readMore();
+          if (socket.destroyed) {
+            return;
+          }
         }
         if (client[kSize] === 0) {
           if (socket[kParser].timeoutType !== TIMEOUT_KEEP_ALIVE) {
@@ -6580,8 +6756,16 @@ var require_client_h1 = __commonJS({
         }
         body2 = bodyStream.stream;
         contentLength2 = bodyStream.length;
-      } else if (util6.isBlobLike(body2) && request.contentType == null && body2.type) {
-        headers.push("content-type", body2.type);
+      } else if (util6.isBlobLike(body2) && request.contentType == null) {
+        const contentType2 = body2.type;
+        if (contentType2) {
+          const contentTypeValue = `${contentType2}`;
+          if (!util6.isValidHeaderValue(contentTypeValue)) {
+            util6.errorRequest(client, request, new InvalidArgumentError("invalid content-type header"));
+            return false;
+          }
+          headers.push("content-type", contentTypeValue);
+        }
       }
       if (body2 && typeof body2.read === "function") {
         body2.read(0);
@@ -6602,11 +6786,18 @@ var require_client_h1 = __commonJS({
         process.emitWarning(new RequestContentLengthMismatchError());
       }
       const socket = client[kSocket];
-      const abort = /* @__PURE__ */ __name((err) => {
-        if (request.aborted || request.completed) {
+      clearIdleSocketValidation(socket);
+      const abort = /* @__PURE__ */ __name((error2) => {
+        if (request.aborted) {
           return;
         }
-        util6.errorRequest(client, request, err || new RequestAbortedError());
+        if (request.completed) {
+          if (request.upgrade || request.method === "CONNECT") {
+            util6.destroy(socket, new InformationalError("aborted"));
+          }
+          return;
+        }
+        util6.errorRequest(client, request, error2 || new RequestAbortedError());
         util6.destroy(body2);
         util6.destroy(socket, new InformationalError("aborted"));
       }, "abort");
@@ -6971,6 +7162,7 @@ var require_client_h2 = __commonJS({
   "node_modules/undici/lib/dispatcher/client-h2.js"(exports2, module2) {
     "use strict";
     var assert7 = require("node:assert");
+    var { errorMonitor } = require("node:events");
     var { pipeline: pipeline3 } = require("node:stream");
     var util6 = require_util();
     var {
@@ -7032,6 +7224,11 @@ var require_client_h2 = __commonJS({
       return result;
     }
     __name(parseH2Headers, "parseH2Headers");
+    function parseH2ResponseHeaders(headers) {
+      const { [HTTP2_HEADER_STATUS]: _statusCode, ...realHeaders } = headers;
+      return parseH2Headers(realHeaders);
+    }
+    __name(parseH2ResponseHeaders, "parseH2ResponseHeaders");
     async function connectH2(client, socket) {
       client[kSocket] = socket;
       if (!h2ExperimentalWarned) {
@@ -7069,7 +7266,6 @@ var require_client_h2 = __commonJS({
       client[kHTTP2Session] = session;
       socket[kHTTP2Session] = session;
       util6.addListener(socket, "error", function(err) {
-        assert7(err.code !== "ERR_TLS_CERT_ALTNAME_INVALID");
         this[kError] = err;
         this[kClient][kOnError](err);
       });
@@ -7130,7 +7326,6 @@ var require_client_h2 = __commonJS({
     }
     __name(resumeH2, "resumeH2");
     function onHttp2SessionError(err) {
-      assert7(err.code !== "ERR_TLS_CERT_ALTNAME_INVALID");
       this[kSocket][kError] = err;
       this[kClient][kOnError](err);
     }
@@ -7202,16 +7397,22 @@ var require_client_h2 = __commonJS({
       const { hostname, port } = client[kUrl];
       headers[HTTP2_HEADER_AUTHORITY] = host || `${hostname}${port ? `:${port}` : ""}`;
       headers[HTTP2_HEADER_METHOD] = method;
-      const abort = /* @__PURE__ */ __name((err) => {
-        if (request.aborted || request.completed) {
+      const abort = /* @__PURE__ */ __name((error2) => {
+        if (request.aborted) {
           return;
         }
-        err = err || new RequestAbortedError();
-        util6.errorRequest(client, request, err);
-        if (stream3 != null) {
-          util6.destroy(stream3, err);
+        if (request.completed) {
+          if (method === "CONNECT" && stream3 != null) {
+            util6.destroy(stream3, error2 || new RequestAbortedError());
+          }
+          return;
         }
-        util6.destroy(body2, err);
+        error2 = error2 || new RequestAbortedError();
+        util6.errorRequest(client, request, error2);
+        if (stream3 != null) {
+          util6.destroy(stream3, error2);
+        }
+        util6.destroy(body2, error2);
         client[kQueue][client[kRunningIdx]++] = null;
         client[kResume]();
       }, "abort");
@@ -7226,18 +7427,42 @@ var require_client_h2 = __commonJS({
       if (method === "CONNECT") {
         session.ref();
         stream3 = session.request(headers, { endStream: false, signal });
-        if (stream3.id && !stream3.pending) {
-          request.onUpgrade(null, null, stream3);
-          ++session[kOpenStreams];
-          client[kQueue][client[kRunningIdx]++] = null;
-        } else {
-          stream3.once("ready", () => {
+        let upgradeResponseFinished = false;
+        const onResponse = /* @__PURE__ */ __name((headers2) => {
+          upgradeResponseFinished = true;
+          stream3.off(errorMonitor, onUpgradeError);
+          request.onUpgradeResponse(Number(headers2[HTTP2_HEADER_STATUS]), headers2, parseH2ResponseHeaders);
+        }, "onResponse");
+        const onUpgradeError = /* @__PURE__ */ __name((error2) => {
+          upgradeResponseFinished = true;
+          stream3.off("response", onResponse);
+          request.onUpgradeError(error2);
+        }, "onUpgradeError");
+        const onReady = /* @__PURE__ */ __name(() => {
+          try {
             request.onUpgrade(null, null, stream3);
-            ++session[kOpenStreams];
-            client[kQueue][client[kRunningIdx]++] = null;
-          });
-        }
+          } catch (error2) {
+            stream3.off("response", onResponse);
+            abort(error2);
+            return;
+          }
+          if (request.aborted) {
+            return;
+          }
+          stream3.off("error", abort);
+          stream3.once(errorMonitor, onUpgradeError);
+          client[kQueue][client[kRunningIdx]++] = null;
+        }, "onReady");
+        stream3.once("response", onResponse);
+        stream3.once("error", abort);
+        ++session[kOpenStreams];
+        onReady();
         stream3.once("close", () => {
+          if (!upgradeResponseFinished && request.completed) {
+            stream3.off("response", onResponse);
+            stream3.off(errorMonitor, onUpgradeError);
+            request.onUpgradeError(new InformationalError(`HTTP/2: "stream error" received - code ${stream3.rstCode}`));
+          }
           session[kOpenStreams] -= 1;
           if (session[kOpenStreams] === 0) session.unref();
         });
@@ -7820,9 +8045,11 @@ var require_client = __commonJS({
         autoSelectFamilyAttemptTimeout,
         // h2
         maxConcurrentStreams,
-        allowH2
+        allowH2,
+        webSocket,
+        eventSource
       } = {}) {
-        super();
+        super({ webSocket, eventSource });
         if (keepAlive !== void 0) {
           throw new InvalidArgumentError("unsupported keepAlive, use pipelining=0 instead");
         }
@@ -8345,8 +8572,8 @@ var require_pool_base = __commonJS({
       static {
         __name(this, "PoolBase");
       }
-      constructor() {
-        super();
+      constructor(opts) {
+        super(opts);
         this[kQueue] = new FixedQueue();
         this[kClients] = [];
         this[kQueued] = 0;
@@ -8521,7 +8748,6 @@ var require_pool = __commonJS({
         allowH2,
         ...options
       } = {}) {
-        super();
         if (connections != null && (!Number.isFinite(connections) || connections < 0)) {
           throw new InvalidArgumentError("invalid connections");
         }
@@ -8542,6 +8768,7 @@ var require_pool = __commonJS({
             ...connect
           });
         }
+        super(options);
         this[kInterceptors] = options.interceptors?.Pool && Array.isArray(options.interceptors.Pool) ? options.interceptors.Pool : [];
         this[kConnections] = connections || null;
         this[kUrl] = util6.parseOrigin(origin);
@@ -8749,8 +8976,7 @@ var require_agent = __commonJS({
       static {
         __name(this, "Agent");
       }
-      constructor({ factory = defaultFactory, maxRedirections = 0, connect, ...options } = {}) {
-        super();
+      constructor({ factory = defaultFactory, maxRedirections = 0, connect, tls, ...options } = {}) {
         if (typeof factory !== "function") {
           throw new InvalidArgumentError("factory must be a function.");
         }
@@ -8760,11 +8986,15 @@ var require_agent = __commonJS({
         if (!Number.isInteger(maxRedirections) || maxRedirections < 0) {
           throw new InvalidArgumentError("maxRedirections must be a positive number");
         }
+        super(options);
         if (connect && typeof connect !== "function") {
           connect = { ...connect };
         }
+        if (tls && typeof tls !== "function") {
+          tls = { ...tls };
+        }
         this[kInterceptors] = options.interceptors?.Agent && Array.isArray(options.interceptors.Agent) ? options.interceptors.Agent : [createRedirectInterceptor({ maxRedirections })];
-        this[kOptions] = { ...util6.deepClone(options), connect };
+        this[kOptions] = { ...util6.deepClone(options), connect, tls };
         this[kOptions].interceptors = options.interceptors ? { ...options.interceptors } : void 0;
         this[kMaxRedirections] = maxRedirections;
         this[kFactory] = factory;
@@ -9215,6 +9445,25 @@ var require_retry_handler = __commonJS({
       return new Date(retryAfter).getTime() - current;
     }
     __name(calculateRetryAfterHeader, "calculateRetryAfterHeader");
+    function validatePartialResponseContentLength(headers, range3, statusCode, retryCount) {
+      const contentLength2 = headers["content-length"];
+      if (contentLength2 == null) {
+        return null;
+      }
+      if (!Number.isFinite(range3.start) || !Number.isFinite(range3.end)) {
+        return null;
+      }
+      const length = Number(contentLength2);
+      const expectedLength = range3.end - range3.start + 1;
+      if (!Number.isFinite(length) || length !== expectedLength) {
+        return new RequestRetryError("Content-Length mismatch", statusCode, {
+          headers,
+          data: { count: retryCount }
+        });
+      }
+      return null;
+    }
+    __name(validatePartialResponseContentLength, "validatePartialResponseContentLength");
     var RetryHandler = class _RetryHandler {
       static {
         __name(this, "RetryHandler");
@@ -9271,6 +9520,7 @@ var require_retry_handler = __commonJS({
         this.end = null;
         this.etag = null;
         this.resume = null;
+        this.headersSent = false;
         this.handler.onConnect((reason) => {
           this.aborted = true;
           if (this.abort) {
@@ -9279,6 +9529,17 @@ var require_retry_handler = __commonJS({
             this.reason = reason;
           }
         });
+      }
+      checkpointResponseEnd(headers, resume) {
+        if (this.end == null && this.opts.method !== "HEAD") {
+          const contentLength2 = headers["content-length"];
+          this.end = contentLength2 != null ? Number(contentLength2) - 1 : null;
+          assert7(
+            this.end == null || Number.isFinite(this.end),
+            "invalid content-length"
+          );
+        }
+        this.resume = this.end != null ? resume : null;
       }
       onRequestSent() {
         if (this.handler.onRequestSent) {
@@ -9341,7 +9602,9 @@ var require_retry_handler = __commonJS({
         const headers = parseHeaders(rawHeaders);
         this.retryCount += 1;
         if (statusCode >= 300) {
-          if (this.retryOpts.statusCodes.includes(statusCode) === false) {
+          if (!this.headersSent && this.retryOpts.statusCodes.includes(statusCode) === false) {
+            this.headersSent = true;
+            this.checkpointResponseEnd(headers, resume);
             return this.handler.onHeaders(
               statusCode,
               rawHeaders,
@@ -9390,9 +9653,21 @@ var require_retry_handler = __commonJS({
             );
             return false;
           }
+          const contentLengthError = validatePartialResponseContentLength(headers, contentRange, statusCode, this.retryCount);
+          if (contentLengthError != null) {
+            this.abort(contentLengthError);
+            return false;
+          }
           const { start, size, end = size - 1 } = contentRange;
-          assert7(this.start === start, "content-range mismatch");
-          assert7(this.end == null || this.end === end, "content-range mismatch");
+          if (this.start !== start || this.end != null && this.end !== end) {
+            this.abort(
+              new RequestRetryError("Content-Range mismatch", statusCode, {
+                headers,
+                data: { count: this.retryCount }
+              })
+            );
+            return false;
+          }
           this.resume = resume;
           return true;
         }
@@ -9400,12 +9675,18 @@ var require_retry_handler = __commonJS({
           if (statusCode === 206) {
             const range3 = parseRangeHeader(headers["content-range"]);
             if (range3 == null) {
+              this.headersSent = true;
               return this.handler.onHeaders(
                 statusCode,
                 rawHeaders,
                 resume,
                 statusMessage
               );
+            }
+            const contentLengthError = validatePartialResponseContentLength(headers, range3, statusCode, this.retryCount);
+            if (contentLengthError != null) {
+              this.abort(contentLengthError);
+              return false;
             }
             const { start, size, end = size - 1 } = range3;
             assert7(
@@ -9426,6 +9707,7 @@ var require_retry_handler = __commonJS({
             "invalid content-length"
           );
           this.resume = resume;
+          this.headersSent = true;
           this.etag = headers.etag != null ? headers.etag : null;
           if (this.etag != null && this.etag.startsWith("W/")) {
             this.etag = null;
@@ -9453,7 +9735,7 @@ var require_retry_handler = __commonJS({
         return this.handler.onComplete(rawTrailers);
       }
       onError(err) {
-        if (this.aborted || isDisturbed(this.opts.body)) {
+        if (this.aborted || isDisturbed(this.opts.body) || this.headersSent && this.resume == null) {
           return this.handler.onError(err);
         }
         if (this.retryCount - this.retryCountCheckpoint > 0) {
@@ -14617,8 +14899,9 @@ var require_fetch = __commonJS({
         }
       );
       response.body = { stream: stream3, source: null, length: null };
-      fetchParams.controller.onAborted = onAborted;
-      fetchParams.controller.on("terminated", onAborted);
+      if (!fetchParams.controller.resume) {
+        fetchParams.controller.on("terminated", onAborted);
+      }
       fetchParams.controller.resume = async () => {
         while (true) {
           let bytes;
@@ -14719,7 +15002,6 @@ var require_fetch = __commonJS({
                 headersList.append(bufferToLowerCasedHeaderName(rawHeaders[i]), rawHeaders[i + 1].toString("latin1"), true);
               }
               location = headersList.get("location", true);
-              this.body = new Readable5({ read: resume });
               const decoders = [];
               const willFollow = location && request.redirect === "follow" && redirectStatusSet.has(status);
               if (request.method !== "HEAD" && request.method !== "CONNECT" && !nullBodyStatus.includes(status) && !willFollow) {
@@ -14727,7 +15009,7 @@ var require_fetch = __commonJS({
                 const codings = contentEncoding ? contentEncoding.toLowerCase().split(",") : [];
                 const maxContentEncodings = 5;
                 if (codings.length > maxContentEncodings) {
-                  reject(new Error(`too many content-encodings in response: ${codings.length}, maximum allowed is ${maxContentEncodings}`));
+                  this.abort(new Error(`too many content-encodings in response: ${codings.length}, maximum allowed is ${maxContentEncodings}`));
                   return true;
                 }
                 for (let i = codings.length - 1; i >= 0; --i) {
@@ -14757,6 +15039,7 @@ var require_fetch = __commonJS({
                   }
                 }
               }
+              this.body = new Readable5({ read: resume });
               const onError = this.onError.bind(this);
               resolve3({
                 status,
@@ -14781,9 +15064,6 @@ var require_fetch = __commonJS({
             onComplete() {
               if (this.abort) {
                 fetchParams.controller.off("terminated", this.abort);
-              }
-              if (fetchParams.controller.onAborted) {
-                fetchParams.controller.off("terminated", fetchParams.controller.onAborted);
               }
               fetchParams.controller.ended = true;
               this.body.push(null);
@@ -16437,15 +16717,50 @@ var require_util6 = __commonJS({
       for (let i = 0; i < path21.length; ++i) {
         const code = path21.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
-        code === 127 || // DEL
+        code > 126 || // exclude DEL and non-ascii
         code === 59) {
           throw new Error("Invalid cookie path");
         }
       }
     }
     __name(validateCookiePath, "validateCookiePath");
+    function isLetterOrDigit(code) {
+      return code >= 48 && code <= 57 || // 0-9
+      code >= 65 && code <= 90 || // A-Z
+      code >= 97 && code <= 122;
+    }
+    __name(isLetterOrDigit, "isLetterOrDigit");
     function validateCookieDomain(domain) {
-      if (domain.startsWith("-") || domain.endsWith(".") || domain.endsWith("-")) {
+      if (domain === " ") {
+        return;
+      }
+      if (domain.length > 255) {
+        throw new Error("Invalid cookie domain");
+      }
+      let labelLength = 0;
+      for (let i = 0; i < domain.length; ++i) {
+        const code = domain.charCodeAt(i);
+        if (code === 46) {
+          if (labelLength === 0) {
+            throw new Error("Invalid cookie domain");
+          }
+          if (domain.charCodeAt(i - 1) === 45) {
+            throw new Error("Invalid cookie domain");
+          }
+          labelLength = 0;
+          continue;
+        }
+        if (labelLength === 0 && !isLetterOrDigit(code)) {
+          throw new Error("Invalid cookie domain");
+        }
+        if (!isLetterOrDigit(code) && code !== 45) {
+          throw new Error("Invalid cookie domain");
+        }
+        if (++labelLength > 63) {
+          throw new Error("Invalid cookie domain");
+        }
+      }
+      if (labelLength === 0 || domain.charCodeAt(domain.length - 1) === 45) {
         throw new Error("Invalid cookie domain");
       }
     }
@@ -16531,7 +16846,11 @@ var require_util6 = __commonJS({
           throw new Error("Invalid unparsed");
         }
         const [key, ...value] = part.split("=");
-        out.push(`${key.trim()}=${value.join("=")}`);
+        const trimmedKey = key.trim();
+        const joinedValue = value.join("=");
+        validateCookieName(trimmedKey);
+        validateCookieValue(joinedValue);
+        out.push(`${trimmedKey}=${joinedValue}`);
       }
       return out.join("; ");
     }
@@ -16663,18 +16982,14 @@ var require_parse = __commonJS({
       } else if (attributeNameLowercase === "httponly") {
         cookieAttributeList.httpOnly = true;
       } else if (attributeNameLowercase === "samesite") {
-        let enforcement = "Default";
         const attributeValueLowercase = attributeValue.toLowerCase();
-        if (attributeValueLowercase.includes("none")) {
-          enforcement = "None";
+        if (attributeValueLowercase === "none") {
+          cookieAttributeList.sameSite = "None";
+        } else if (attributeValueLowercase === "strict") {
+          cookieAttributeList.sameSite = "Strict";
+        } else if (attributeValueLowercase === "lax") {
+          cookieAttributeList.sameSite = "Lax";
         }
-        if (attributeValueLowercase.includes("strict")) {
-          enforcement = "Strict";
-        }
-        if (attributeValueLowercase.includes("lax")) {
-          enforcement = "Lax";
-        }
-        cookieAttributeList.sameSite = enforcement;
       } else {
         cookieAttributeList.unparsed ??= [];
         cookieAttributeList.unparsed.push(`${attributeName}=${attributeValue}`);
@@ -17530,7 +17845,7 @@ var require_connection = __commonJS({
           const secProtocol = response.headersList.get("Sec-WebSocket-Protocol");
           if (secProtocol !== null) {
             const requestProtocols = getDecodeSplit("sec-websocket-protocol", request.headersList);
-            if (!requestProtocols.includes(secProtocol)) {
+            if (requestProtocols === null || !requestProtocols.includes(secProtocol)) {
               failWebsocketConnection(ws, "Protocol was not set in the opening handshake.");
               return;
             }
@@ -17641,7 +17956,6 @@ var require_permessage_deflate = __commonJS({
     var tail = Buffer.from([0, 0, 255, 255]);
     var kBuffer = /* @__PURE__ */ Symbol("kBuffer");
     var kLength = /* @__PURE__ */ Symbol("kLength");
-    var kDefaultMaxDecompressedSize = 4 * 1024 * 1024;
     var PerMessageDeflate = class {
       static {
         __name(this, "PerMessageDeflate");
@@ -17649,22 +17963,22 @@ var require_permessage_deflate = __commonJS({
       /** @type {import('node:zlib').InflateRaw} */
       #inflate;
       #options = {};
-      /** @type {boolean} */
-      #aborted = false;
-      /** @type {Function|null} */
-      #currentCallback = null;
+      #maxPayloadSize = 0;
       /**
        * @param {Map<string, string>} extensions
        */
-      constructor(extensions) {
+      constructor(extensions, options) {
         this.#options.serverNoContextTakeover = extensions.has("server_no_context_takeover");
         this.#options.serverMaxWindowBits = extensions.get("server_max_window_bits");
+        this.#maxPayloadSize = options.maxPayloadSize;
       }
+      /**
+       * Decompress a compressed payload.
+       * @param {Buffer} chunk Compressed data
+       * @param {boolean} fin Final fragment flag
+       * @param {Function} callback Callback function
+       */
       decompress(chunk, fin, callback) {
-        if (this.#aborted) {
-          callback(new MessageSizeExceededError());
-          return;
-        }
         if (!this.#inflate) {
           let windowBits = Z_DEFAULT_WINDOWBITS;
           if (this.#options.serverMaxWindowBits) {
@@ -17683,20 +17997,12 @@ var require_permessage_deflate = __commonJS({
           this.#inflate[kBuffer] = [];
           this.#inflate[kLength] = 0;
           this.#inflate.on("data", (data) => {
-            if (this.#aborted) {
-              return;
-            }
             this.#inflate[kLength] += data.length;
-            if (this.#inflate[kLength] > kDefaultMaxDecompressedSize) {
-              this.#aborted = true;
+            if (this.#maxPayloadSize > 0 && this.#inflate[kLength] > this.#maxPayloadSize) {
+              callback(new MessageSizeExceededError());
               this.#inflate.removeAllListeners();
               this.#inflate.destroy();
               this.#inflate = null;
-              if (this.#currentCallback) {
-                const cb = this.#currentCallback;
-                this.#currentCallback = null;
-                cb(new MessageSizeExceededError());
-              }
               return;
             }
             this.#inflate[kBuffer].push(data);
@@ -17706,19 +18012,17 @@ var require_permessage_deflate = __commonJS({
             callback(err);
           });
         }
-        this.#currentCallback = callback;
         this.#inflate.write(chunk);
         if (fin) {
           this.#inflate.write(tail);
         }
         this.#inflate.flush(() => {
-          if (this.#aborted || !this.#inflate) {
+          if (!this.#inflate) {
             return;
           }
           const full = Buffer.concat(this.#inflate[kBuffer], this.#inflate[kLength]);
           this.#inflate[kBuffer].length = 0;
           this.#inflate[kLength] = 0;
-          this.#currentCallback = null;
           callback(null, full);
         });
       }
@@ -17749,11 +18053,18 @@ var require_receiver = __commonJS({
     var { WebsocketFrameSend } = require_frame();
     var { closeWebSocketConnection } = require_connection();
     var { PerMessageDeflate } = require_permessage_deflate();
+    var { MessageSizeExceededError } = require_errors();
+    function failWebsocketConnectionWithCode(ws, code, reason) {
+      closeWebSocketConnection(ws, code, reason, Buffer.byteLength(reason));
+      failWebsocketConnection(ws, reason);
+    }
+    __name(failWebsocketConnectionWithCode, "failWebsocketConnectionWithCode");
     var ByteParser = class extends Writable {
       static {
         __name(this, "ByteParser");
       }
       #buffers = [];
+      #fragmentsBytes = 0;
       #byteOffset = 0;
       #loop = false;
       #state = parserStates.INFO;
@@ -17761,16 +18072,23 @@ var require_receiver = __commonJS({
       #fragments = [];
       /** @type {Map<string, PerMessageDeflate>} */
       #extensions;
+      /** @type {number} */
+      #maxFragments;
+      /** @type {number} */
+      #maxPayloadSize;
       /**
        * @param {import('./websocket').WebSocket} ws
        * @param {Map<string, string>|null} extensions
+       * @param {{ maxFragments?: number, maxPayloadSize?: number }} [options]
        */
-      constructor(ws, extensions) {
+      constructor(ws, extensions, options = {}) {
         super();
         this.ws = ws;
         this.#extensions = extensions == null ? /* @__PURE__ */ new Map() : extensions;
+        this.#maxFragments = options.maxFragments ?? 0;
+        this.#maxPayloadSize = options.maxPayloadSize ?? 0;
         if (this.#extensions.has("permessage-deflate")) {
-          this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions));
+          this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions, options));
         }
       }
       /**
@@ -17782,6 +18100,13 @@ var require_receiver = __commonJS({
         this.#byteOffset += chunk.length;
         this.#loop = true;
         this.run(callback);
+      }
+      #validatePayloadLength() {
+        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength + this.#fragmentsBytes > this.#maxPayloadSize) {
+          failWebsocketConnectionWithCode(this.ws, 1009, "Payload size exceeds maximum allowed size");
+          return false;
+        }
+        return true;
       }
       /**
        * Runs whenever a new chunk is received.
@@ -17842,6 +18167,9 @@ var require_receiver = __commonJS({
             if (payloadLength <= 125) {
               this.#info.payloadLength = payloadLength;
               this.#state = parserStates.READ_DATA;
+              if (!this.#validatePayloadLength()) {
+                return;
+              }
             } else if (payloadLength === 126) {
               this.#state = parserStates.PAYLOADLENGTH_16;
             } else if (payloadLength === 127) {
@@ -17862,6 +18190,9 @@ var require_receiver = __commonJS({
             const buffer3 = this.consume(2);
             this.#info.payloadLength = buffer3.readUInt16BE(0);
             this.#state = parserStates.READ_DATA;
+            if (!this.#validatePayloadLength()) {
+              return;
+            }
           } else if (this.#state === parserStates.PAYLOADLENGTH_64) {
             if (this.#byteOffset < 8) {
               return callback();
@@ -17875,6 +18206,9 @@ var require_receiver = __commonJS({
             }
             this.#info.payloadLength = lower;
             this.#state = parserStates.READ_DATA;
+            if (!this.#validatePayloadLength()) {
+              return;
+            }
           } else if (this.#state === parserStates.READ_DATA) {
             if (this.#byteOffset < this.#info.payloadLength) {
               return callback();
@@ -17883,34 +18217,58 @@ var require_receiver = __commonJS({
             if (isControlFrame(this.#info.opcode)) {
               this.#loop = this.parseControlFrame(body2);
               this.#state = parserStates.INFO;
+              const socket = this.ws[kResponse].socket;
+              if (this.#loop && socket.writableNeedDrain) {
+                this.#loop = false;
+                socket.once("drain", () => {
+                  if (this.destroyed) return;
+                  this.#loop = true;
+                  this.run(callback);
+                });
+                return;
+              }
             } else {
               if (!this.#info.compressed) {
-                this.#fragments.push(body2);
+                if (!this.writeFragments(body2)) {
+                  return;
+                }
+                if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
+                  failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
+                  return;
+                }
                 if (!this.#info.fragmented && this.#info.fin) {
-                  const fullMessage = Buffer.concat(this.#fragments);
-                  websocketMessageReceived(this.ws, this.#info.binaryType, fullMessage);
-                  this.#fragments.length = 0;
+                  websocketMessageReceived(this.ws, this.#info.binaryType, this.consumeFragments());
                 }
                 this.#state = parserStates.INFO;
               } else {
-                this.#extensions.get("permessage-deflate").decompress(body2, this.#info.fin, (error2, data) => {
-                  if (error2) {
-                    failWebsocketConnection(this.ws, error2.message);
-                    return;
-                  }
-                  this.#fragments.push(data);
-                  if (!this.#info.fin) {
-                    this.#state = parserStates.INFO;
+                this.#extensions.get("permessage-deflate").decompress(
+                  body2,
+                  this.#info.fin,
+                  (error2, data) => {
+                    if (error2) {
+                      const code = error2 instanceof MessageSizeExceededError ? 1009 : 1007;
+                      failWebsocketConnectionWithCode(this.ws, code, error2.message);
+                      return;
+                    }
+                    if (!this.writeFragments(data)) {
+                      return;
+                    }
+                    if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
+                      failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
+                      return;
+                    }
+                    if (!this.#info.fin) {
+                      this.#state = parserStates.INFO;
+                      this.#loop = true;
+                      this.run(callback);
+                      return;
+                    }
+                    websocketMessageReceived(this.ws, this.#info.binaryType, this.consumeFragments());
                     this.#loop = true;
+                    this.#state = parserStates.INFO;
                     this.run(callback);
-                    return;
                   }
-                  websocketMessageReceived(this.ws, this.#info.binaryType, Buffer.concat(this.#fragments));
-                  this.#loop = true;
-                  this.#state = parserStates.INFO;
-                  this.#fragments.length = 0;
-                  this.run(callback);
-                });
+                );
                 this.#loop = false;
                 break;
               }
@@ -17952,6 +18310,26 @@ var require_receiver = __commonJS({
         }
         this.#byteOffset -= n;
         return buffer3;
+      }
+      writeFragments(fragment) {
+        if (this.#maxFragments > 0 && this.#fragments.length === this.#maxFragments) {
+          failWebsocketConnectionWithCode(this.ws, 1008, "Too many message fragments");
+          return false;
+        }
+        this.#fragmentsBytes += fragment.length;
+        this.#fragments.push(fragment);
+        return true;
+      }
+      consumeFragments() {
+        const fragments = this.#fragments;
+        if (fragments.length === 1) {
+          this.#fragmentsBytes = 0;
+          return fragments.shift();
+        }
+        const output = Buffer.concat(fragments, this.#fragmentsBytes);
+        this.#fragments = [];
+        this.#fragmentsBytes = 0;
+        return output;
       }
       parseCloseBody(data) {
         assert7(data.length !== 1);
@@ -18398,7 +18776,13 @@ var require_websocket = __commonJS({
        */
       #onConnectionEstablished(response, parsedExtensions) {
         this[kResponse] = response;
-        const parser = new ByteParser(this, parsedExtensions);
+        const webSocketOptions = this[kController]?.dispatcher?.webSocketOptions;
+        const maxFragments = webSocketOptions?.maxFragments;
+        const maxPayloadSize = webSocketOptions?.maxPayloadSize;
+        const parser = new ByteParser(this, parsedExtensions, {
+          maxFragments,
+          maxPayloadSize
+        });
         parser.on("drain", onParserDrain);
         parser.on("error", onParserError.bind(this));
         response.socket.ws = this;
@@ -18549,6 +18933,7 @@ var require_util8 = __commonJS({
 var require_eventsource_stream = __commonJS({
   "node_modules/undici/lib/web/eventsource/eventsource-stream.js"(exports2, module2) {
     "use strict";
+    var buffer3 = require("node:buffer");
     var { Transform: Transform2 } = require("node:stream");
     var { isASCIINumber, isValidLastEventId } = require_util8();
     var BOM = [239, 187, 191];
@@ -18556,6 +18941,53 @@ var require_eventsource_stream = __commonJS({
     var CR = 13;
     var COLON = 58;
     var SPACE = 32;
+    var defaultMaxEventSize = buffer3.kStringMaxLength;
+    var DATA = Buffer.from("data");
+    var EVENT = Buffer.from("event");
+    var ID2 = Buffer.from("id");
+    var RETRY = Buffer.from("retry");
+    var minParserItems = 1024;
+    var maxParserItems = 131072;
+    var bytesPerParserItem = 128;
+    function isASCIINumberBytes(buffer4, start) {
+      if (start >= buffer4.length) {
+        return false;
+      }
+      for (let i = start; i < buffer4.length; i++) {
+        if (buffer4[i] < 48 || buffer4[i] > 57) {
+          return false;
+        }
+      }
+      return true;
+    }
+    __name(isASCIINumberBytes, "isASCIINumberBytes");
+    function isValidLastEventIdBytes(buffer4, start) {
+      for (let i = start; i < buffer4.length; i++) {
+        if (buffer4[i] === 0) {
+          return false;
+        }
+      }
+      return true;
+    }
+    __name(isValidLastEventIdBytes, "isValidLastEventIdBytes");
+    function isFieldName(line, length, field) {
+      if (length !== field.length) {
+        return false;
+      }
+      for (let i = 0; i < length; i++) {
+        if (line[i] !== field[i]) {
+          return false;
+        }
+      }
+      return true;
+    }
+    __name(isFieldName, "isFieldName");
+    function createMaxEventSizeExceededError() {
+      const error2 = new Error("EventSource message size exceeded");
+      error2.aborted = false;
+      return error2;
+    }
+    __name(createMaxEventSizeExceededError, "createMaxEventSizeExceededError");
     var EventSourceStream = class extends Transform2 {
       static {
         __name(this, "EventSourceStream");
@@ -18578,10 +19010,20 @@ var require_eventsource_stream = __commonJS({
        */
       eventEndCheck = false;
       /**
-       * @type {Buffer}
+       * @type {Buffer[]}
        */
-      buffer = null;
+      chunks = [];
+      chunkIndex = 0;
       pos = 0;
+      lineChunkIndex = 0;
+      linePos = 0;
+      lineLength = 0;
+      eventSize = 0;
+      eventFieldSizes = { data: 0, event: 0, id: 0, retry: 0 };
+      dataLineCount = 0;
+      maxEventSize;
+      maxDataLines;
+      maxBufferedChunks;
       event = {
         data: void 0,
         event: void 0,
@@ -18590,6 +19032,7 @@ var require_eventsource_stream = __commonJS({
       };
       /**
        * @param {object} options
+       * @param {number} [options.maxEventSize]
        * @param {eventSourceSettings} options.eventSourceSettings
        * @param {Function} [options.push]
        */
@@ -18597,6 +19040,10 @@ var require_eventsource_stream = __commonJS({
         options.readableObjectMode = true;
         super(options);
         this.state = options.eventSourceSettings || {};
+        this.maxEventSize = options.maxEventSize ?? defaultMaxEventSize;
+        const parserItemLimit = this.maxEventSize > 0 ? Math.min(maxParserItems, Math.max(minParserItems, Math.floor(this.maxEventSize / bytesPerParserItem))) : 0;
+        this.maxDataLines = parserItemLimit;
+        this.maxBufferedChunks = parserItemLimit;
         if (options.push) {
           this.push = options.push;
         }
@@ -18612,63 +19059,34 @@ var require_eventsource_stream = __commonJS({
           callback();
           return;
         }
-        if (this.buffer) {
-          this.buffer = Buffer.concat([this.buffer, chunk]);
-        } else {
-          this.buffer = chunk;
+        if (this.maxEventSize > 0 && this.chunks.length >= this.maxBufferedChunks && chunk[0] !== LF && chunk[0] !== CR) {
+          callback(createMaxEventSizeExceededError());
+          return;
         }
+        this.chunks.push(chunk);
         if (this.checkBOM) {
-          switch (this.buffer.length) {
-            case 1:
-              if (this.buffer[0] === BOM[0]) {
-                callback();
-                return;
-              }
-              this.checkBOM = false;
-              callback();
-              return;
-            case 2:
-              if (this.buffer[0] === BOM[0] && this.buffer[1] === BOM[1]) {
-                callback();
-                return;
-              }
-              this.checkBOM = false;
-              break;
-            case 3:
-              if (this.buffer[0] === BOM[0] && this.buffer[1] === BOM[1] && this.buffer[2] === BOM[2]) {
-                this.buffer = Buffer.alloc(0);
-                this.checkBOM = false;
-                callback();
-                return;
-              }
-              this.checkBOM = false;
-              break;
-            default:
-              if (this.buffer[0] === BOM[0] && this.buffer[1] === BOM[1] && this.buffer[2] === BOM[2]) {
-                this.buffer = this.buffer.subarray(3);
-              }
-              this.checkBOM = false;
-              break;
+          if (this.handleBOM()) {
+            callback();
+            return;
           }
         }
-        while (this.pos < this.buffer.length) {
+        while (this.hasCurrentByte()) {
+          const byte = this.currentByte();
           if (this.eventEndCheck) {
             if (this.crlfCheck) {
-              if (this.buffer[this.pos] === LF) {
-                this.buffer = this.buffer.subarray(this.pos + 1);
-                this.pos = 0;
+              if (byte === LF) {
                 this.crlfCheck = false;
+                this.consumeCurrentByte();
                 continue;
               }
               this.crlfCheck = false;
             }
-            if (this.buffer[this.pos] === LF || this.buffer[this.pos] === CR) {
-              if (this.buffer[this.pos] === CR) {
+            if (byte === LF || byte === CR) {
+              if (byte === CR) {
                 this.crlfCheck = true;
               }
-              this.buffer = this.buffer.subarray(this.pos + 1);
-              this.pos = 0;
-              if (this.event.data !== void 0 || this.event.event || this.event.id || this.event.retry) {
+              this.consumeCurrentByte();
+              if (this.hasPendingEvent()) {
                 this.processEvent(this.event);
               }
               this.clearEvent();
@@ -18677,23 +19095,36 @@ var require_eventsource_stream = __commonJS({
             this.eventEndCheck = false;
             continue;
           }
-          if (this.buffer[this.pos] === LF || this.buffer[this.pos] === CR) {
-            if (this.buffer[this.pos] === CR) {
+          if (byte === LF || byte === CR) {
+            if (byte === CR) {
               this.crlfCheck = true;
             }
-            this.parseLine(this.buffer.subarray(0, this.pos), this.event);
-            this.buffer = this.buffer.subarray(this.pos + 1);
-            this.pos = 0;
+            try {
+              this.parseLine(this.readLine(), this.event);
+            } catch (error2) {
+              callback(error2);
+              return;
+            }
+            this.consumeCurrentByte();
             this.eventEndCheck = true;
             continue;
           }
-          this.pos++;
+          if (this.maxEventSize > 0 && ++this.lineLength > this.maxEventSize + 7) {
+            callback(createMaxEventSizeExceededError());
+            return;
+          }
+          this.advanceCursor();
         }
         callback();
       }
+      _destroy(error2, callback) {
+        this.chunks.length = 0;
+        this.clearEvent();
+        super._destroy(error2, callback);
+      }
       /**
        * @param {Buffer} line
-       * @param {EventStreamEvent} event
+       * @param {EventSourceStreamEvent} event
        */
       parseLine(line, event) {
         if (line.length === 0) {
@@ -18703,44 +19134,60 @@ var require_eventsource_stream = __commonJS({
         if (colonPosition === 0) {
           return;
         }
-        let field = "";
-        let value = "";
+        let fieldLength = line.length;
+        let valueStart = line.length;
         if (colonPosition !== -1) {
-          field = line.subarray(0, colonPosition).toString("utf8");
-          let valueStart = colonPosition + 1;
+          fieldLength = colonPosition;
+          valueStart = colonPosition + 1;
           if (line[valueStart] === SPACE) {
             ++valueStart;
           }
-          value = line.subarray(valueStart).toString("utf8");
-        } else {
-          field = line.toString("utf8");
-          value = "";
         }
-        switch (field) {
-          case "data":
-            if (event[field] === void 0) {
-              event[field] = value;
-            } else {
-              event[field] += `
+        if (isFieldName(line, fieldLength, DATA)) {
+          if (this.maxEventSize > 0 && this.dataLineCount >= this.maxDataLines) {
+            throw createMaxEventSizeExceededError();
+          }
+          const valueBytes = line.length - valueStart;
+          const dataSize = this.eventFieldSizes.data + (event.data === void 0 ? 0 : 1) + valueBytes;
+          this.setEventFieldSize("data", dataSize);
+          const value = line.toString("utf8", valueStart);
+          if (event.data === void 0) {
+            event.data = value;
+          } else {
+            event.data += `
 ${value}`;
-            }
-            break;
-          case "retry":
-            if (isASCIINumber(value)) {
-              event[field] = value;
-            }
-            break;
-          case "id":
-            if (isValidLastEventId(value)) {
-              event[field] = value;
-            }
-            break;
-          case "event":
-            if (value.length > 0) {
-              event[field] = value;
-            }
-            break;
+          }
+          this.dataLineCount++;
+          return;
         }
+        if (isFieldName(line, fieldLength, RETRY)) {
+          if (isASCIINumberBytes(line, valueStart)) {
+            this.setEventFieldSize("retry", line.length - valueStart);
+            event.retry = line.toString("utf8", valueStart);
+          }
+          return;
+        }
+        if (isFieldName(line, fieldLength, ID2)) {
+          if (isValidLastEventIdBytes(line, valueStart)) {
+            this.setEventFieldSize("id", line.length - valueStart);
+            event.id = line.toString("utf8", valueStart);
+          }
+          return;
+        }
+        if (isFieldName(line, fieldLength, EVENT)) {
+          if (valueStart < line.length) {
+            this.setEventFieldSize("event", line.length - valueStart);
+            event.event = line.toString("utf8", valueStart);
+          }
+        }
+      }
+      setEventFieldSize(field, size) {
+        const eventSize = this.eventSize - this.eventFieldSizes[field] + size;
+        if (this.maxEventSize > 0 && eventSize > this.maxEventSize) {
+          throw createMaxEventSizeExceededError();
+        }
+        this.eventSize = eventSize;
+        this.eventFieldSizes[field] = size;
       }
       /**
        * @param {EventSourceStreamEvent} event
@@ -18764,12 +19211,128 @@ ${value}`;
         }
       }
       clearEvent() {
-        this.event = {
-          data: void 0,
-          event: void 0,
-          id: void 0,
-          retry: void 0
-        };
+        this.event.data = void 0;
+        this.event.event = void 0;
+        this.event.id = void 0;
+        this.event.retry = void 0;
+        this.eventSize = 0;
+        this.dataLineCount = 0;
+        this.eventFieldSizes.data = 0;
+        this.eventFieldSizes.event = 0;
+        this.eventFieldSizes.id = 0;
+        this.eventFieldSizes.retry = 0;
+      }
+      hasPendingEvent() {
+        return this.event.data !== void 0 || this.event.event !== void 0 || this.event.id !== void 0 || this.event.retry !== void 0;
+      }
+      hasCurrentByte() {
+        return this.chunkIndex < this.chunks.length && this.pos < this.chunks[this.chunkIndex].length;
+      }
+      currentByte() {
+        return this.chunks[this.chunkIndex][this.pos];
+      }
+      consumeCurrentByte() {
+        this.advanceCursor();
+        this.syncLineStartToCursor();
+      }
+      advanceCursor() {
+        this.pos++;
+        while (this.chunkIndex < this.chunks.length && this.pos >= this.chunks[this.chunkIndex].length) {
+          this.chunkIndex++;
+          this.pos = 0;
+        }
+      }
+      syncLineStartToCursor() {
+        this.lineChunkIndex = this.chunkIndex;
+        this.linePos = this.pos;
+        this.lineLength = 0;
+        this.dropConsumedChunks();
+      }
+      dropConsumedChunks() {
+        if (this.lineChunkIndex > 0) {
+          const consumed = this.lineChunkIndex;
+          this.chunks.splice(0, consumed);
+          this.lineChunkIndex = 0;
+          this.chunkIndex -= consumed;
+        }
+        if (this.chunkIndex === this.chunks.length) {
+          this.chunks.length = 0;
+          this.chunkIndex = 0;
+          this.pos = 0;
+          this.lineChunkIndex = 0;
+          this.linePos = 0;
+        }
+      }
+      readLine() {
+        if (this.lineChunkIndex === this.chunkIndex) {
+          return this.chunks[this.chunkIndex].subarray(this.linePos, this.pos);
+        }
+        const chunks = [];
+        let length = 0;
+        for (let i = this.lineChunkIndex; i <= this.chunkIndex; i++) {
+          const chunk = this.chunks[i];
+          const start = i === this.lineChunkIndex ? this.linePos : 0;
+          const end = i === this.chunkIndex ? this.pos : chunk.length;
+          const slice = chunk.subarray(start, end);
+          length += slice.length;
+          chunks.push(slice);
+        }
+        return Buffer.concat(chunks, length);
+      }
+      peekBufferedByte(offset) {
+        let chunkIndex = this.lineChunkIndex;
+        let pos = this.linePos;
+        while (chunkIndex < this.chunks.length) {
+          const chunk = this.chunks[chunkIndex];
+          const remaining = chunk.length - pos;
+          if (offset < remaining) {
+            return chunk[pos + offset];
+          }
+          offset -= remaining;
+          chunkIndex++;
+          pos = 0;
+        }
+      }
+      discardLeadingBytes(count) {
+        while (count > 0 && this.lineChunkIndex < this.chunks.length) {
+          const chunk = this.chunks[this.lineChunkIndex];
+          const remaining = chunk.length - this.linePos;
+          if (count < remaining) {
+            this.linePos += count;
+            count = 0;
+          } else {
+            count -= remaining;
+            this.lineChunkIndex++;
+            this.linePos = 0;
+          }
+        }
+        this.chunkIndex = this.lineChunkIndex;
+        this.pos = this.linePos;
+        this.dropConsumedChunks();
+      }
+      handleBOM() {
+        const first = this.peekBufferedByte(0);
+        const second = this.peekBufferedByte(1);
+        const third = this.peekBufferedByte(2);
+        if (second === void 0) {
+          if (first === BOM[0]) {
+            return true;
+          }
+          this.checkBOM = false;
+          return true;
+        }
+        if (third === void 0) {
+          if (first === BOM[0] && second === BOM[1]) {
+            return true;
+          }
+          this.checkBOM = false;
+          return false;
+        }
+        if (first === BOM[0] && second === BOM[1] && third === BOM[2]) {
+          this.discardLeadingBytes(3);
+        }
+        this.checkBOM = false;
+        return !this.hasCurrentByte();
       }
     };
     module2.exports = {
@@ -18793,6 +19356,7 @@ var require_eventsource = __commonJS({
     var { delay: delay4 } = require_util8();
     var { kEnumerableProperty } = require_util();
     var { environmentSettingsObject } = require_util2();
+    var { getGlobalDispatcher } = require_global2();
     var experimentalWarned = false;
     var defaultReconnectionTime = 3e3;
     var CONNECTING = 0;
@@ -18936,6 +19500,7 @@ var require_eventsource = __commonJS({
           this.#state.origin = response.urlList[response.urlList.length - 1].origin;
           const eventSourceStream = new EventSourceStream({
             eventSourceSettings: this.#state,
+            maxEventSize: this.#dispatcher.eventSourceOptions?.maxEventSize,
             push: /* @__PURE__ */ __name((event) => {
               this.dispatchEvent(createFastMessageEvent(
                 event.type,
@@ -19068,7 +19633,8 @@ var require_eventsource = __commonJS({
       {
         key: "dispatcher",
         // undici only
-        converter: webidl.converters.any
+        converter: webidl.converters.any,
+        defaultValue: /* @__PURE__ */ __name(() => getGlobalDispatcher(), "defaultValue")
       }
     ]);
     module2.exports = {
@@ -19311,6 +19877,10 @@ var require_brace_expansion = __commonJS({
     var escClose2 = "\0CLOSE" + Math.random() + "\0";
     var escComma2 = "\0COMMA" + Math.random() + "\0";
     var escPeriod2 = "\0PERIOD" + Math.random() + "\0";
+    var EXPANSION_MAX2 = 1e5;
+    var EXPANSION_MAX_LENGTH2 = 4e6;
+    var EXPANSION_MAX_DEPTH2 = 1e3;
+    var EXPANSION_MAX_REWRITES2 = 1e3;
     function numeric2(str) {
       return parseInt(str, 10) == str ? parseInt(str, 10) : str.charCodeAt(0);
     }
@@ -19323,34 +19893,51 @@ var require_brace_expansion = __commonJS({
       return str.split(escSlash2).join("\\").split(escOpen2).join("{").split(escClose2).join("}").split(escComma2).join(",").split(escPeriod2).join(".");
     }
     __name(unescapeBraces2, "unescapeBraces");
-    function parseCommaParts2(str) {
-      if (!str)
-        return [""];
-      var parts = [];
-      var m = balanced2("{", "}", str);
-      if (!m)
-        return str.split(",");
-      var pre = m.pre;
-      var body2 = m.body;
-      var post = m.post;
-      var p = pre.split(",");
-      p[p.length - 1] += "{" + body2 + "}";
-      var postParts = parseCommaParts2(post);
-      if (post.length) {
-        p[p.length - 1] += postParts.shift();
-        p.push.apply(p, postParts);
+    function pushAll2(target, items) {
+      for (var i = 0; i < items.length; i++) {
+        target.push(items[i]);
       }
-      parts.push.apply(parts, p);
-      return parts;
+    }
+    __name(pushAll2, "pushAll");
+    function parseCommaParts2(str) {
+      var parts = [];
+      var carry = "";
+      for (; ; ) {
+        var m = balanced2("{", "}", str);
+        if (!m) {
+          var tail = str.split(",");
+          tail[0] = carry + tail[0];
+          pushAll2(parts, tail);
+          return parts;
+        }
+        var pre = m.pre;
+        var body2 = m.body;
+        var post = m.post;
+        var p = pre.split(",");
+        p[0] = carry + p[0];
+        p[p.length - 1] += "{" + body2 + "}";
+        if (!post.length) {
+          pushAll2(parts, p);
+          return parts;
+        }
+        carry = p.pop();
+        pushAll2(parts, p);
+        str = post;
+      }
     }
     __name(parseCommaParts2, "parseCommaParts");
-    function expandTop(str) {
+    function expandTop(str, options) {
       if (!str)
         return [];
+      options = options || {};
+      var max = options.max == null ? EXPANSION_MAX2 : options.max;
+      var maxLength = options.maxLength == null ? EXPANSION_MAX_LENGTH2 : options.maxLength;
+      var maxDepth = options.maxDepth == null ? EXPANSION_MAX_DEPTH2 : options.maxDepth;
+      var maxRewrites = options.maxRewrites == null ? EXPANSION_MAX_REWRITES2 : options.maxRewrites;
       if (str.substr(0, 2) === "{}") {
         str = "\\{\\}" + str.substr(2);
       }
-      return expand2(escapeBraces2(str), true).map(unescapeBraces2);
+      return expand2(escapeBraces2(str), max, maxLength, maxDepth, 0, maxRewrites, true).map(unescapeBraces2);
     }
     __name(expandTop, "expandTop");
     function embrace2(str) {
@@ -19369,86 +19956,182 @@ var require_brace_expansion = __commonJS({
       return i >= y;
     }
     __name(gte2, "gte");
-    function expand2(str, isTop) {
-      var expansions = [];
-      var m = balanced2("{", "}", str);
-      if (!m || /\$$/.test(m.pre)) return [str];
-      var isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m.body);
-      var isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m.body);
-      var isSequence = isNumericSequence || isAlphaSequence;
-      var isOptions = m.body.indexOf(",") >= 0;
-      if (!isSequence && !isOptions) {
-        if (m.post.match(/,(?!,).*\}/)) {
-          str = m.pre + "{" + m.body + escClose2 + m.post;
-          return expand2(str);
+    function combine2(acc, base, pre, values, max, maxLength, dropEmpties, outBase) {
+      var out = [];
+      var length = 0;
+      for (var a = 0; a < acc.length; a++) {
+        for (var v = 0; v < values.length; v++) {
+          if (out.length >= max) return out;
+          var expansion = acc[a] + pre + values[v];
+          if (dropEmpties && expansion.length === base[a]) continue;
+          if (length + expansion.length > maxLength) return out;
+          out.push(expansion);
+          outBase.push(base[a]);
+          length += expansion.length;
         }
-        return [str];
       }
-      var n;
-      if (isSequence) {
-        n = m.body.split(/\.\./);
-      } else {
-        n = parseCommaParts2(m.body);
-        if (n.length === 1) {
-          n = expand2(n[0], false).map(embrace2);
-          if (n.length === 1) {
-            var post = m.post.length ? expand2(m.post, false) : [""];
-            return post.map(function(p) {
-              return m.pre + n[0] + p;
-            });
+      return out;
+    }
+    __name(combine2, "combine");
+    function expandSequence2(body2, isAlphaSequence, max, maxLength) {
+      var n = body2.split(/\.\./);
+      var N = [];
+      if (n[0] === void 0 || n[1] === void 0) {
+        return N;
+      }
+      var x = numeric2(n[0]);
+      var y = numeric2(n[1]);
+      var width = Math.max(n[0].length, n[1].length);
+      var incr = n.length === 3 && n[2] !== void 0 ? Math.max(Math.abs(numeric2(n[2])), 1) : 1;
+      var test = lte2;
+      var reverse = y < x;
+      if (reverse) {
+        incr *= -1;
+        test = gte2;
+      }
+      var pad = n.some(isPadded2);
+      var length = 0;
+      for (var i = x; test(i, y) && N.length < max; i += incr) {
+        var c;
+        if (isAlphaSequence) {
+          c = String.fromCharCode(i);
+          if (c === "\\") {
+            c = "";
           }
-        }
-      }
-      var pre = m.pre;
-      var post = m.post.length ? expand2(m.post, false) : [""];
-      var N;
-      if (isSequence) {
-        var x = numeric2(n[0]);
-        var y = numeric2(n[1]);
-        var width = Math.max(n[0].length, n[1].length);
-        var incr = n.length == 3 ? Math.abs(numeric2(n[2])) : 1;
-        var test = lte2;
-        var reverse = y < x;
-        if (reverse) {
-          incr *= -1;
-          test = gte2;
-        }
-        var pad = n.some(isPadded2);
-        N = [];
-        for (var i = x; test(i, y); i += incr) {
-          var c;
-          if (isAlphaSequence) {
-            c = String.fromCharCode(i);
-            if (c === "\\")
-              c = "";
-          } else {
-            c = String(i);
-            if (pad) {
-              var need = width - c.length;
-              if (need > 0) {
-                var z = new Array(need + 1).join("0");
-                if (i < 0)
-                  c = "-" + z + c.slice(1);
-                else
-                  c = z + c;
+        } else {
+          c = String(i);
+          if (pad) {
+            var need = width - c.length;
+            if (need > 0) {
+              var z = new Array(need + 1).join("0");
+              if (i < 0) {
+                c = "-" + z + c.slice(1);
+              } else {
+                c = z + c;
               }
             }
           }
-          N.push(c);
         }
-      } else {
-        N = concatMap(n, function(el) {
-          return expand2(el, false);
-        });
+        if (length + c.length > maxLength) break;
+        N.push(c);
+        length += c.length;
       }
-      for (var j = 0; j < N.length; j++) {
-        for (var k = 0; k < post.length; k++) {
-          var expansion = pre + N[j] + post[k];
-          if (!isTop || isSequence || expansion)
-            expansions.push(expansion);
+      return N;
+    }
+    __name(expandSequence2, "expandSequence");
+    function expand2(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
+      if (depth > maxDepth) {
+        return [str];
+      }
+      var acc = [""];
+      var accBase = [0];
+      var rewrites = 0;
+      var dropEmpties = false;
+      var firstGroup = true;
+      var nextBase;
+      for (; ; ) {
+        var m = balanced2("{", "}", str);
+        if (!m) {
+          return combine2(acc, accBase, str, [""], max, maxLength, dropEmpties, []);
         }
+        var pre = m.pre;
+        if (/\$$/.test(pre)) {
+          return combine2(acc, accBase, str, [""], max, maxLength, dropEmpties, []);
+        }
+        var isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m.body);
+        var isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m.body);
+        var isSequence = isNumericSequence || isAlphaSequence;
+        var isOptions = m.body.indexOf(",") >= 0;
+        if (!isSequence && !isOptions) {
+          if (rewrites < maxRewrites && m.post.match(/,(?!,).*\}/)) {
+            rewrites++;
+            str = m.pre + "{" + m.body + escClose2 + m.post;
+            isTop = true;
+            firstGroup = true;
+            dropEmpties = false;
+            accBase = [];
+            for (var b = 0; b < acc.length; b++) {
+              accBase.push(acc[b].length);
+            }
+            continue;
+          }
+          return combine2(
+            acc,
+            accBase,
+            pre + "{" + m.body + "}" + m.post,
+            [""],
+            max,
+            maxLength,
+            dropEmpties,
+            []
+          );
+        }
+        if (firstGroup) {
+          dropEmpties = isTop && !isSequence;
+          firstGroup = false;
+        }
+        var values;
+        if (isSequence) {
+          values = expandSequence2(m.body, isAlphaSequence, max, maxLength);
+        } else {
+          var n = parseCommaParts2(m.body);
+          if (n.length === 1 && n[0] !== void 0) {
+            n = expand2(n[0], max, maxLength, maxDepth, depth + 1, maxRewrites, false).map(embrace2);
+            if (n.length === 1) {
+              nextBase = [];
+              acc = combine2(
+                acc,
+                accBase,
+                pre + n[0],
+                [""],
+                max,
+                maxLength,
+                dropEmpties && !m.post.length,
+                nextBase
+              );
+              accBase = nextBase;
+              if (!m.post.length) break;
+              str = m.post;
+              continue;
+            }
+          }
+          var dropsEmpties = dropEmpties && !m.post.length && !pre;
+          for (var d = 0; dropsEmpties && d < acc.length; d++) {
+            if (acc[d].length !== accBase[d]) {
+              dropsEmpties = false;
+            }
+          }
+          values = [];
+          var valuesLength = 0;
+          outer: for (var j = 0; j < n.length; j++) {
+            var expanded = expand2(n[j], max, maxLength, maxDepth, depth + 1, maxRewrites, false);
+            for (var k = 0; k < expanded.length; k++) {
+              var v = expanded[k];
+              if (dropsEmpties && !v) continue;
+              if (values.length >= max || valuesLength + v.length > maxLength) {
+                break outer;
+              }
+              values.push(v);
+              valuesLength += v.length;
+            }
+          }
+        }
+        nextBase = [];
+        acc = combine2(
+          acc,
+          accBase,
+          pre,
+          values,
+          max,
+          maxLength,
+          dropEmpties && !m.post.length,
+          nextBase
+        );
+        accBase = nextBase;
+        if (!m.post.length) break;
+        str = m.post;
       }
-      return expansions;
+      return acc;
     }
     __name(expand2, "expand");
   }
@@ -36772,9 +37455,56 @@ function readAttributeStr(xmlData, i) {
   };
 }
 __name(readAttributeStr, "readAttributeStr");
-var validAttrStrRegxp = new RegExp(`(\\s*)([^\\s=]+)(\\s*=)?(\\s*(['"])(([\\s\\S])*?)\\5)?`, "g");
+function scanAttributeTokens(attrStr) {
+  const tokens = [];
+  const len = attrStr.length;
+  let i = 0;
+  while (i < len) {
+    const tokenStart = i;
+    while (i < len && isWhiteSpace(attrStr[i])) i++;
+    if (i >= len) break;
+    if (attrStr[i] === "=") {
+      i = tokenStart + 1;
+      continue;
+    }
+    const leadingWs = attrStr.slice(tokenStart, i);
+    const nameStart = i;
+    while (i < len && !isWhiteSpace(attrStr[i]) && attrStr[i] !== "=") i++;
+    const name = attrStr.slice(nameStart, i);
+    let equalsGroup;
+    let j = i;
+    while (j < len && isWhiteSpace(attrStr[j])) j++;
+    if (j < len && attrStr[j] === "=") {
+      equalsGroup = attrStr.slice(i, j + 1);
+      i = j + 1;
+    }
+    let quoteChar;
+    let value;
+    let k = i;
+    while (k < len && isWhiteSpace(attrStr[k])) k++;
+    if (k < len && (attrStr[k] === '"' || attrStr[k] === "'")) {
+      const valueStart = k + 1;
+      const closeIdx = attrStr.indexOf(attrStr[k], valueStart);
+      if (closeIdx !== -1) {
+        quoteChar = attrStr[k];
+        value = attrStr.slice(valueStart, closeIdx);
+        i = closeIdx + 1;
+      }
+    }
+    const token = { startIndex: tokenStart };
+    token[1] = leadingWs;
+    token[2] = name;
+    token[3] = equalsGroup;
+    token[4] = quoteChar !== void 0 ? true : void 0;
+    token[5] = quoteChar;
+    token[6] = value;
+    tokens.push(token);
+  }
+  return tokens;
+}
+__name(scanAttributeTokens, "scanAttributeTokens");
 function validateAttributeString(attrStr, options) {
-  const matches = getAllMatches(attrStr, validAttrStrRegxp);
+  const matches = scanAttributeTokens(attrStr);
   const attrNames = {};
   for (let i = 0; i < matches.length; i++) {
     if (matches[i][1].length === 0) {
@@ -36864,6 +37594,505 @@ function getPositionFromMatch(match4) {
 }
 __name(getPositionFromMatch, "getPositionFromMatch");
 
+// node_modules/@nodable/entities/src/entities.js
+var CURRENCY = {
+  cent: "\xA2",
+  pound: "\xA3",
+  curren: "\xA4",
+  yen: "\xA5",
+  euro: "\u20AC",
+  dollar: "$",
+  fnof: "\u0192",
+  inr: "\u20B9",
+  af: "\u060B",
+  birr: "\u1265\u122D",
+  peso: "\u20B1",
+  rub: "\u20BD",
+  won: "\u20A9",
+  yuan: "\xA5",
+  cedil: "\xB8"
+};
+var XML = {
+  amp: "&",
+  apos: "'",
+  gt: ">",
+  lt: "<",
+  quot: '"'
+};
+var COMMON_HTML = {
+  nbsp: "\xA0",
+  copy: "\xA9",
+  reg: "\xAE",
+  trade: "\u2122",
+  mdash: "\u2014",
+  ndash: "\u2013",
+  hellip: "\u2026",
+  laquo: "\xAB",
+  raquo: "\xBB",
+  lsquo: "\u2018",
+  rsquo: "\u2019",
+  ldquo: "\u201C",
+  rdquo: "\u201D",
+  bull: "\u2022",
+  para: "\xB6",
+  sect: "\xA7",
+  deg: "\xB0",
+  frac12: "\xBD",
+  frac14: "\xBC",
+  frac34: "\xBE"
+};
+
+// node_modules/@nodable/entities/src/EntityDecoder.js
+var ENTITY_ACTION = Object.freeze({
+  /** Resolve and expand the entity normally. */
+  ALLOW: "allow",
+  /** Silently skip this entity — it will not be registered. */
+  BLOCK: "block",
+  /** Throw an error, aborting entity registration entirely. */
+  THROW: "throw"
+});
+var SPECIAL_CHARS = new Set("!?\\\\/[]$%{}^&*()<>|+");
+function validateEntityName(name) {
+  if (name[0] === "#") {
+    throw new Error(`[EntityReplacer] Invalid character '#' in entity name: "${name}"`);
+  }
+  for (const ch of name) {
+    if (SPECIAL_CHARS.has(ch)) {
+      throw new Error(`[EntityReplacer] Invalid character '${ch}' in entity name: "${name}"`);
+    }
+  }
+  return name;
+}
+__name(validateEntityName, "validateEntityName");
+function mergeEntityMaps(...maps) {
+  const out = /* @__PURE__ */ Object.create(null);
+  for (const map of maps) {
+    if (!map) continue;
+    for (const key of Object.keys(map)) {
+      const raw = map[key];
+      if (typeof raw === "string") {
+        out[key] = raw;
+      } else if (raw && typeof raw === "object" && raw.val !== void 0) {
+        const val = raw.val;
+        if (typeof val === "string") {
+          out[key] = val;
+        }
+      }
+    }
+  }
+  return out;
+}
+__name(mergeEntityMaps, "mergeEntityMaps");
+var LIMIT_TIER_EXTERNAL = "external";
+var LIMIT_TIER_BASE = "base";
+var LIMIT_TIER_ALL = "all";
+function parseLimitTiers(raw) {
+  if (!raw || raw === LIMIT_TIER_EXTERNAL) return /* @__PURE__ */ new Set([LIMIT_TIER_EXTERNAL]);
+  if (raw === LIMIT_TIER_ALL) return /* @__PURE__ */ new Set([LIMIT_TIER_ALL]);
+  if (raw === LIMIT_TIER_BASE) return /* @__PURE__ */ new Set([LIMIT_TIER_BASE]);
+  if (Array.isArray(raw)) return new Set(raw);
+  return /* @__PURE__ */ new Set([LIMIT_TIER_EXTERNAL]);
+}
+__name(parseLimitTiers, "parseLimitTiers");
+var NCR_LEVEL = Object.freeze({ allow: 0, leave: 1, remove: 2, throw: 3 });
+var XML10_ALLOWED_C0 = /* @__PURE__ */ new Set([9, 10, 13]);
+function parseNCRConfig(ncr) {
+  if (!ncr) {
+    return { xmlVersion: 1, onLevel: NCR_LEVEL.allow, nullLevel: NCR_LEVEL.remove };
+  }
+  const xmlVersion = ncr.xmlVersion === 1.1 ? 1.1 : 1;
+  const onLevel = NCR_LEVEL[ncr.onNCR] ?? NCR_LEVEL.allow;
+  const nullLevel = NCR_LEVEL[ncr.nullNCR] ?? NCR_LEVEL.remove;
+  const clampedNull = Math.max(nullLevel, NCR_LEVEL.remove);
+  return { xmlVersion, onLevel, nullLevel: clampedNull };
+}
+__name(parseNCRConfig, "parseNCRConfig");
+var EntityDecoder = class {
+  static {
+    __name(this, "EntityDecoder");
+  }
+  /**
+   * @param {object} [options]
+   * @param {object|null}  [options.namedEntities]        — extra named entities merged into base map
+   * @param {object}  [options.limit]                 — security limits
+   * @param {number}       [options.limit.maxTotalExpansions=0]  — 0 = unlimited
+   * @param {number}       [options.limit.maxExpandedLength=0]   — 0 = unlimited
+   * @param {'external'|'base'|'all'|string[]} [options.limit.applyLimitsTo='external']
+   *   Which entity tiers count against the security limits:
+   *   - 'external' (default) — only input/runtime + persistent external entities
+   *   - 'base'               — only DEFAULT_XML_ENTITIES + namedEntities
+   *   - 'all'                — every entity regardless of tier
+   *   - string[]             — explicit combination, e.g. ['external', 'base']
+   * @param {((resolved: string, original: string) => string)|null} [options.postCheck=null]
+   * @param {string[]} [options.remove=[]] — entity names (e.g. ['nbsp', '#13']) to delete (replace with empty string)
+   * @param {string[]} [options.leave=[]]  — entity names to keep as literal (unchanged in output)
+   * @param {object}   [options.ncr]       — Numeric Character Reference controls
+   * @param {1.0|1.1}  [options.ncr.xmlVersion=1.0]
+   *   XML version governing which codepoint ranges are restricted:
+   *   - 1.0 — C0 controls U+0001–U+001F (except U+0009/000A/000D) are prohibited
+   *   - 1.1 — C0 controls are allowed when written as NCRs; C1 (U+007F–U+009F) decoded as-is
+   * @param {'allow'|'leave'|'remove'|'throw'} [options.ncr.onNCR='allow']
+   *   Base action for numeric references. Severity order: allow < leave < remove < throw.
+   *   For codepoint ranges that carry a minimum level (surrogates → remove, XML 1.0 C0 → remove),
+   *   the effective action is max(onNCR, rangeMinimum).
+   * @param {'remove'|'throw'} [options.ncr.nullNCR='remove']
+   *   Action for U+0000 (null). 'allow' and 'leave' are clamped to 'remove' since null is never safe.
+   * @param {((name: string, value: string) => 'allow'|'block'|'throw')|null} [options.onExternalEntity=null]
+   *   Hook called when an external entity is registered via `setExternalEntities()` or
+   *   `addExternalEntity()`. Return `ENTITY_ACTION.ALLOW` to accept the entity,
+   *   `ENTITY_ACTION.BLOCK` to silently skip it, or `ENTITY_ACTION.THROW` to abort with an error.
+   * @param {((name: string, value: string) => 'allow'|'block'|'throw')|null} [options.onInputEntity=null]
+   *   Hook called when an input entity is registered via `addInputEntities()`. Return
+   *   `ENTITY_ACTION.ALLOW` to accept, `ENTITY_ACTION.BLOCK` to silently skip, or
+   *   `ENTITY_ACTION.THROW` to abort with an error.
+   */
+  constructor(options = {}) {
+    this._limit = options.limit || {};
+    this._maxTotalExpansions = this._limit.maxTotalExpansions || 0;
+    this._maxExpandedLength = this._limit.maxExpandedLength || 0;
+    this._postCheck = typeof options.postCheck === "function" ? options.postCheck : (r) => r;
+    this._limitTiers = parseLimitTiers(this._limit.applyLimitsTo ?? LIMIT_TIER_EXTERNAL);
+    this._numericAllowed = options.numericAllowed ?? true;
+    this._baseMap = mergeEntityMaps(XML, options.namedEntities || null);
+    this._externalMap = /* @__PURE__ */ Object.create(null);
+    this._inputMap = /* @__PURE__ */ Object.create(null);
+    this._totalExpansions = 0;
+    this._expandedLength = 0;
+    this._removeSet = new Set(options.remove && Array.isArray(options.remove) ? options.remove : []);
+    this._leaveSet = new Set(options.leave && Array.isArray(options.leave) ? options.leave : []);
+    const ncrCfg = parseNCRConfig(options.ncr);
+    this._ncrXmlVersion = ncrCfg.xmlVersion;
+    this._ncrOnLevel = ncrCfg.onLevel;
+    this._ncrNullLevel = ncrCfg.nullLevel;
+    this._onExternalEntity = typeof options.onExternalEntity === "function" ? options.onExternalEntity : null;
+    this._onInputEntity = typeof options.onInputEntity === "function" ? options.onInputEntity : null;
+  }
+  // -------------------------------------------------------------------------
+  // Private: registration hook dispatch
+  // -------------------------------------------------------------------------
+  /**
+   * Invoke a registration hook for a single entity name/value pair.
+   * Returns true when the entity should be accepted, false when it should be
+   * silently skipped (BLOCK), and throws when the hook returns THROW.
+   *
+   * @param {((name: string, value: string) => 'allow'|'block'|'throw')|null} hook
+   * @param {string} name
+   * @param {string} value
+   * @param {string} context  — used in error messages ('external' | 'input')
+   * @returns {boolean}  true = accept, false = skip
+   */
+  _applyRegistrationHook(hook, name, value, context3) {
+    if (!hook) return true;
+    const action5 = hook(name, value);
+    if (action5 === ENTITY_ACTION.BLOCK) return false;
+    if (action5 === ENTITY_ACTION.THROW) {
+      throw new Error(
+        `[EntityDecoder] Registration of ${context3} entity "&${name};" was rejected by hook`
+      );
+    }
+    return true;
+  }
+  // -------------------------------------------------------------------------
+  // Persistent external entity registration
+  // -------------------------------------------------------------------------
+  /**
+   * Replace the full set of persistent external entities.
+   * All keys are validated — throws on invalid characters.
+   * If `onExternalEntity` is set, it is called once per entry; entries that
+   * return `ENTITY_ACTION.BLOCK` are silently omitted, `ENTITY_ACTION.THROW`
+   * aborts the whole call.
+   * @param {Record<string, string | { regex?: RegExp, val: string }>} map
+   */
+  setExternalEntities(map) {
+    if (map) {
+      for (const key of Object.keys(map)) {
+        validateEntityName(key);
+      }
+    }
+    if (!this._onExternalEntity) {
+      this._externalMap = mergeEntityMaps(map);
+      return;
+    }
+    const flat = mergeEntityMaps(map);
+    const filtered = /* @__PURE__ */ Object.create(null);
+    for (const [name, value] of Object.entries(flat)) {
+      if (this._applyRegistrationHook(this._onExternalEntity, name, value, "external")) {
+        filtered[name] = value;
+      }
+    }
+    this._externalMap = filtered;
+  }
+  /**
+   * Add a single persistent external entity.
+   * If `onExternalEntity` is set it is called before the entity is stored;
+   * `ENTITY_ACTION.BLOCK` silently skips storage, `ENTITY_ACTION.THROW` raises.
+   * @param {string} key
+   * @param {string} value
+   */
+  addExternalEntity(key, value) {
+    validateEntityName(key);
+    if (typeof value === "string" && value.indexOf("&") === -1) {
+      if (this._applyRegistrationHook(this._onExternalEntity, key, value, "external")) {
+        this._externalMap[key] = value;
+      }
+    }
+  }
+  // -------------------------------------------------------------------------
+  // Input / runtime entity registration (per document)
+  // -------------------------------------------------------------------------
+  /**
+   * Inject DOCTYPE entities for the current document.
+   * Also resets per-document expansion counters.
+   * If `onInputEntity` is set it is called once per entry; entries returning
+   * `ENTITY_ACTION.BLOCK` are silently omitted, `ENTITY_ACTION.THROW` aborts.
+   * @param {Record<string, string | { regx?: RegExp, regex?: RegExp, val: string }>} map
+   */
+  addInputEntities(map) {
+    this._totalExpansions = 0;
+    this._expandedLength = 0;
+    if (!this._onInputEntity) {
+      this._inputMap = mergeEntityMaps(map);
+      return;
+    }
+    const flat = mergeEntityMaps(map);
+    const filtered = /* @__PURE__ */ Object.create(null);
+    for (const [name, value] of Object.entries(flat)) {
+      if (this._applyRegistrationHook(this._onInputEntity, name, value, "input")) {
+        filtered[name] = value;
+      }
+    }
+    this._inputMap = filtered;
+  }
+  // -------------------------------------------------------------------------
+  // Per-document reset
+  // -------------------------------------------------------------------------
+  /**
+   * Wipe input/runtime entities and reset counters.
+   * Call this before processing each new document.
+   * @returns {this}
+   */
+  reset() {
+    this._inputMap = /* @__PURE__ */ Object.create(null);
+    this._totalExpansions = 0;
+    this._expandedLength = 0;
+    return this;
+  }
+  // -------------------------------------------------------------------------
+  // XML version (can be set after construction, e.g. once parser reads <?xml?>)
+  // -------------------------------------------------------------------------
+  /**
+   * Update the XML version used for NCR classification.
+   * Call this as soon as the document's `<?xml version="...">` declaration is parsed.
+   * @param {1.0|1.1|number} version
+   */
+  setXmlVersion(version3) {
+    this._ncrXmlVersion = version3 === 1.1 ? 1.1 : 1;
+  }
+  // -------------------------------------------------------------------------
+  // Primary API
+  // -------------------------------------------------------------------------
+  /**
+   * Replace all entity references in `str` in a single pass.
+   *
+   * @param {string} str
+   * @returns {string}
+   */
+  decode(str) {
+    if (typeof str !== "string" || str.length === 0) return str;
+    if (str.indexOf("&") === -1) return str;
+    const original = str;
+    const chunks = [];
+    const len = str.length;
+    let last = 0;
+    let i = 0;
+    const limitExpansions = this._maxTotalExpansions > 0;
+    const limitLength = this._maxExpandedLength > 0;
+    const checkLimits = limitExpansions || limitLength;
+    while (i < len) {
+      if (str.charCodeAt(i) !== 38) {
+        i++;
+        continue;
+      }
+      let j = i + 1;
+      while (j < len && str.charCodeAt(j) !== 59 && j - i <= 32) j++;
+      if (j >= len || str.charCodeAt(j) !== 59) {
+        i++;
+        continue;
+      }
+      const token = str.slice(i + 1, j);
+      if (token.length === 0) {
+        i++;
+        continue;
+      }
+      let replacement;
+      let tier2;
+      if (this._removeSet.has(token)) {
+        replacement = "";
+        if (tier2 === void 0) {
+          tier2 = LIMIT_TIER_EXTERNAL;
+        }
+      } else if (this._leaveSet.has(token)) {
+        i++;
+        continue;
+      } else if (token.charCodeAt(0) === 35) {
+        const ncrResult = this._resolveNCR(token);
+        if (ncrResult === void 0) {
+          i++;
+          continue;
+        }
+        replacement = ncrResult;
+        tier2 = LIMIT_TIER_BASE;
+      } else {
+        const resolved = this._resolveName(token);
+        replacement = resolved?.value;
+        tier2 = resolved?.tier;
+      }
+      if (replacement === void 0) {
+        i++;
+        continue;
+      }
+      if (i > last) chunks.push(str.slice(last, i));
+      chunks.push(replacement);
+      last = j + 1;
+      i = last;
+      if (checkLimits && this._tierCounts(tier2)) {
+        if (limitExpansions) {
+          this._totalExpansions++;
+          if (this._totalExpansions > this._maxTotalExpansions) {
+            throw new Error(
+              `[EntityReplacer] Entity expansion count limit exceeded: ${this._totalExpansions} > ${this._maxTotalExpansions}`
+            );
+          }
+        }
+        if (limitLength) {
+          const delta = replacement.length - (token.length + 2);
+          if (delta > 0) {
+            this._expandedLength += delta;
+            if (this._expandedLength > this._maxExpandedLength) {
+              throw new Error(
+                `[EntityReplacer] Expanded content length limit exceeded: ${this._expandedLength} > ${this._maxExpandedLength}`
+              );
+            }
+          }
+        }
+      }
+    }
+    if (last < len) chunks.push(str.slice(last));
+    const result = chunks.length === 0 ? str : chunks.join("");
+    return this._postCheck(result, original);
+  }
+  // -------------------------------------------------------------------------
+  // Private: limit tier check
+  // -------------------------------------------------------------------------
+  /**
+   * Returns true if a resolved entity of the given tier should count
+   * against the expansion/length limits.
+   * @param {string} tier  — LIMIT_TIER_EXTERNAL | LIMIT_TIER_BASE
+   * @returns {boolean}
+   */
+  _tierCounts(tier2) {
+    if (this._limitTiers.has(LIMIT_TIER_ALL)) return true;
+    return this._limitTiers.has(tier2);
+  }
+  // -------------------------------------------------------------------------
+  // Private: entity resolution
+  // -------------------------------------------------------------------------
+  /**
+   * Resolve a named entity token (without & and ;).
+   * Priority: inputMap > externalMap > baseMap
+   * Returns the resolved value tagged with its limit tier.
+   *
+   * @param {string} name
+   * @returns {{ value: string, tier: string }|undefined}
+   */
+  _resolveName(name) {
+    if (name in this._inputMap) return { value: this._inputMap[name], tier: LIMIT_TIER_EXTERNAL };
+    if (name in this._externalMap) return { value: this._externalMap[name], tier: LIMIT_TIER_EXTERNAL };
+    if (name in this._baseMap) return { value: this._baseMap[name], tier: LIMIT_TIER_BASE };
+    return void 0;
+  }
+  /**
+   * Classify a codepoint and return the minimum action level that must be applied.
+   * Returns -1 when no minimum is imposed (normal allow path).
+   *
+   * Ranges checked (in priority order):
+   *   1. U+0000            — null, governed by nullNCR (always ≥ remove)
+   *   2. U+D800–U+DFFF     — surrogates, always prohibited (min: remove)
+   *   3. U+0001–U+001F \ {0x09,0x0A,0x0D}  — XML 1.0 restricted C0 (min: remove)
+   *      (skipped in XML 1.1 — C0 controls are allowed when written as NCRs)
+   *
+   * @param {number} cp  — codepoint
+   * @returns {number}   — minimum NCR_LEVEL value, or -1 for no restriction
+   */
+  _classifyNCR(cp2) {
+    if (cp2 === 0) return this._ncrNullLevel;
+    if (cp2 >= 55296 && cp2 <= 57343) return NCR_LEVEL.remove;
+    if (this._ncrXmlVersion === 1) {
+      if (cp2 >= 1 && cp2 <= 31 && !XML10_ALLOWED_C0.has(cp2)) return NCR_LEVEL.remove;
+    }
+    return -1;
+  }
+  /**
+   * Execute a resolved NCR action.
+   *
+   * @param {number} action   — NCR_LEVEL value
+   * @param {string} token    — raw token (e.g. '#38') for error messages
+   * @param {number} cp       — codepoint, used only for error messages
+   * @returns {string|undefined}
+   *   - decoded character string  → 'allow'
+   *   - ''                        → 'remove'
+   *   - undefined                 → 'leave' (caller must skip past '&' only)
+   *   - throws Error              → 'throw'
+   */
+  _applyNCRAction(action5, token, cp2) {
+    switch (action5) {
+      case NCR_LEVEL.allow:
+        return String.fromCodePoint(cp2);
+      case NCR_LEVEL.remove:
+        return "";
+      case NCR_LEVEL.leave:
+        return void 0;
+      // signal: keep literal
+      case NCR_LEVEL.throw:
+        throw new Error(
+          `[EntityDecoder] Prohibited numeric character reference &${token}; (U+${cp2.toString(16).toUpperCase().padStart(4, "0")})`
+        );
+      default:
+        return String.fromCodePoint(cp2);
+    }
+  }
+  /**
+   * Full NCR resolution pipeline for a numeric token.
+   *
+   * Steps:
+   *   1. Parse the codepoint (decimal or hex).
+   *   2. Validate the raw codepoint range (NaN, <0, >0x10FFFF).
+   *   3. If numericAllowed is false and no minimum restriction applies → leave as-is.
+   *   4. Classify the codepoint to find the minimum required action level.
+   *   5. Resolve effective action = max(onNCR, minimum).
+   *   6. Apply and return.
+   *
+   * @param {string} token  — e.g. '#38', '#x26', '#X26'
+   * @returns {string|undefined}
+   *   - string (incl. '')  — replacement ('' = remove)
+   *   - undefined          — leave original &token; as-is
+   */
+  _resolveNCR(token) {
+    const second = token.charCodeAt(1);
+    let cp2;
+    if (second === 120 || second === 88) {
+      cp2 = parseInt(token.slice(2), 16);
+    } else {
+      cp2 = parseInt(token.slice(1), 10);
+    }
+    if (Number.isNaN(cp2) || cp2 < 0 || cp2 > 1114111) return void 0;
+    const minimum = this._classifyNCR(cp2);
+    if (!this._numericAllowed && minimum < NCR_LEVEL.remove) return void 0;
+    const effective = minimum === -1 ? this._ncrOnLevel : Math.max(this._ncrOnLevel, minimum);
+    return this._applyNCRAction(effective, token, cp2);
+  }
+};
+
 // node_modules/fast-xml-parser/src/xmlparser/OptionsBuilder.js
 var defaultOnDangerousProperty = /* @__PURE__ */ __name((name) => {
   if (DANGEROUS_PROPERTY_NAMES.includes(name)) {
@@ -36890,7 +38119,8 @@ var defaultOptions2 = {
   numberParseOptions: {
     hex: true,
     leadingZeros: true,
-    eNotation: true
+    eNotation: true,
+    unicode: false
   },
   tagValueProcessor: /* @__PURE__ */ __name(function(tagName, val) {
     return val;
@@ -36906,6 +38136,7 @@ var defaultOptions2 = {
   unpairedTags: [],
   processEntities: true,
   htmlEntities: false,
+  entityDecoder: null,
   ignoreDeclaration: false,
   ignorePiTags: false,
   transformTagName: false,
@@ -36938,31 +38169,32 @@ function validatePropertyName(propertyName, optionName) {
   }
 }
 __name(validatePropertyName, "validatePropertyName");
-function normalizeProcessEntities(value) {
+function normalizeProcessEntities(value, htmlEntities) {
   if (typeof value === "boolean") {
     return {
       enabled: value,
       // true or false
       maxEntitySize: 1e4,
-      maxExpansionDepth: 10,
-      maxTotalExpansions: 1e3,
+      maxExpansionDepth: 1e4,
+      maxTotalExpansions: Infinity,
       maxExpandedLength: 1e5,
-      maxEntityCount: 100,
+      maxEntityCount: 1e3,
       allowedTags: null,
-      tagFilter: null
+      tagFilter: null,
+      appliesTo: "all"
     };
   }
   if (typeof value === "object" && value !== null) {
     return {
       enabled: value.enabled !== false,
-      // default true if not specified
-      maxEntitySize: value.maxEntitySize ?? 1e4,
-      maxExpansionDepth: value.maxExpansionDepth ?? 10,
-      maxTotalExpansions: value.maxTotalExpansions ?? 1e3,
-      maxExpandedLength: value.maxExpandedLength ?? 1e5,
-      maxEntityCount: value.maxEntityCount ?? 100,
+      maxEntitySize: Math.max(1, value.maxEntitySize ?? 1e4),
+      maxExpansionDepth: Math.max(1, value.maxExpansionDepth ?? 1e4),
+      maxTotalExpansions: Math.max(1, value.maxTotalExpansions ?? Infinity),
+      maxExpandedLength: Math.max(1, value.maxExpandedLength ?? 1e5),
+      maxEntityCount: Math.max(1, value.maxEntityCount ?? 1e3),
       allowedTags: value.allowedTags ?? null,
-      tagFilter: value.tagFilter ?? null
+      tagFilter: value.tagFilter ?? null,
+      appliesTo: value.appliesTo ?? "all"
     };
   }
   return normalizeProcessEntities(true);
@@ -36985,7 +38217,8 @@ var buildOptions = /* @__PURE__ */ __name(function(options) {
   if (built.onDangerousProperty === null) {
     built.onDangerousProperty = defaultOnDangerousProperty;
   }
-  built.processEntities = normalizeProcessEntities(built.processEntities);
+  built.processEntities = normalizeProcessEntities(built.processEntities, built.htmlEntities);
+  built.unpairedTagsSet = new Set(built.unpairedTags);
   if (built.stopNodes && Array.isArray(built.stopNodes)) {
     built.stopNodes = built.stopNodes.map((node) => {
       if (typeof node === "string" && node.startsWith("*.")) {
@@ -37024,8 +38257,17 @@ var XmlNode = class {
     } else {
       this.child.push({ [node.tagname]: node.child });
     }
+    this.addStartIndex(startIndex);
+  }
+  addStartIndex(startIndex) {
     if (startIndex !== void 0) {
       this.child[this.child.length - 1][METADATA_SYMBOL] = { startIndex };
+    }
+  }
+  addEndIndex(endIndex) {
+    const lastChild = this.child[this.child.length - 1];
+    if (lastChild !== void 0 && lastChild[METADATA_SYMBOL] !== void 0 && lastChild[METADATA_SYMBOL].endIndex === void 0) {
+      lastChild[METADATA_SYMBOL].endIndex = endIndex;
     }
   }
   /** symbol used for metadata */
@@ -37034,14 +38276,67 @@ var XmlNode = class {
   }
 };
 
+// node_modules/xml-naming/src/index.js
+var nameStartChar10 = ":A-Za-z_\xC0-\xD6\xD8-\xF6\xF8-\u02FF\u0370-\u037D\u037F-\u0486\u0488-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD";
+var nameChar10 = nameStartChar10 + "\\-\\.\\d\xB7\u0300-\u036F\u203F-\u2040";
+var nameStartChar11 = ":A-Za-z_\xC0-\u02FF\u0370-\u037D\u037F-\u0486\u0488-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD\u{10000}-\u{EFFFF}";
+var nameChar11 = nameStartChar11 + "\\-\\.\\d\xB7\u0300-\u036F\u0487\u203F-\u2040";
+var buildRegexes = /* @__PURE__ */ __name((startChar, char, flags = "") => {
+  const ncStart = startChar.replace(":", "");
+  const ncChar = char.replace(":", "");
+  const ncNamePat = `[${ncStart}][${ncChar}]*`;
+  return {
+    name: new RegExp(`^[${startChar}][${char}]*$`, flags),
+    ncName: new RegExp(`^${ncNamePat}$`, flags),
+    qName: new RegExp(`^${ncNamePat}(?::${ncNamePat})?$`, flags),
+    nmToken: new RegExp(`^[${char}]+$`, flags),
+    nmTokens: new RegExp(`^[${char}]+(?:\\s+[${char}]+)*$`, flags)
+  };
+}, "buildRegexes");
+var regexes10 = buildRegexes(nameStartChar10, nameChar10);
+var regexes11 = buildRegexes(nameStartChar11, nameChar11, "u");
+var nameStartCharAscii = ":A-Za-z_";
+var nameCharAscii = nameStartCharAscii + "\\-\\.\\d";
+var regexesAscii = buildRegexes(nameStartCharAscii, nameCharAscii);
+var getRegexes = /* @__PURE__ */ __name((xmlVersion = "1.0", asciiOnly = false) => {
+  if (asciiOnly) return regexesAscii;
+  return xmlVersion === "1.1" ? regexes11 : regexes10;
+}, "getRegexes");
+var qName = /* @__PURE__ */ __name((str, { xmlVersion = "1.0", asciiOnly = false } = {}) => getRegexes(xmlVersion, asciiOnly).qName.test(str), "qName");
+var PRODUCTIONS = ["name", "ncName", "qName", "nmToken", "nmTokens"];
+var createValidator = /* @__PURE__ */ __name((production, { xmlVersion = "1.0", asciiOnly = false, maxCacheSize = 2048 } = {}) => {
+  if (!PRODUCTIONS.includes(production)) {
+    throw new TypeError(
+      `Unknown production "${production}". Must be one of: ${PRODUCTIONS.join(", ")}`
+    );
+  }
+  const regex = getRegexes(xmlVersion, asciiOnly)[production];
+  let cache = /* @__PURE__ */ new Map();
+  const validator = /* @__PURE__ */ __name((str) => {
+    const cached = cache.get(str);
+    if (cached !== void 0) return cached;
+    const result = regex.test(str);
+    if (cache.size < maxCacheSize) cache.set(str, result);
+    return result;
+  }, "validator");
+  validator.reset = () => {
+    cache = /* @__PURE__ */ new Map();
+  };
+  return validator;
+}, "createValidator");
+
 // node_modules/fast-xml-parser/src/xmlparser/DocTypeReader.js
 var DocTypeReader = class {
   static {
     __name(this, "DocTypeReader");
   }
-  constructor(options) {
+  constructor(options, xmlVersion) {
     this.suppressValidationErr = !options;
     this.options = options;
+    this.xmlVersion = xmlVersion || 1;
+  }
+  setXmlVersion(xmlVersion = 1) {
+    this.xmlVersion = xmlVersion;
   }
   readDocType(xmlData, i) {
     const entities = /* @__PURE__ */ Object.create(null);
@@ -37050,24 +38345,31 @@ var DocTypeReader = class {
       i = i + 9;
       let angleBracketsCount = 1;
       let hasBody = false, comment = false;
+      let quoteChar = null;
       let exp = "";
       for (; i < xmlData.length; i++) {
+        if (quoteChar !== null) {
+          if (xmlData[i] === quoteChar) quoteChar = null;
+          exp += xmlData[i];
+          continue;
+        }
+        if (!hasBody && !comment && (xmlData[i] === '"' || xmlData[i] === "'")) {
+          quoteChar = xmlData[i];
+          exp += xmlData[i];
+          continue;
+        }
         if (xmlData[i] === "<" && !comment) {
           if (hasBody && hasSeq(xmlData, "!ENTITY", i)) {
             i += 7;
             let entityName, val;
             [entityName, val, i] = this.readEntityExp(xmlData, i + 1, this.suppressValidationErr);
             if (val.indexOf("&") === -1) {
-              if (this.options.enabled !== false && this.options.maxEntityCount && entityCount >= this.options.maxEntityCount) {
+              if (this.options.enabled !== false && this.options.maxEntityCount != null && entityCount >= this.options.maxEntityCount) {
                 throw new Error(
                   `Entity count (${entityCount + 1}) exceeds maximum allowed (${this.options.maxEntityCount})`
                 );
               }
-              const escaped = entityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-              entities[entityName] = {
-                regx: RegExp(`&${escaped};`, "g"),
-                val
-              };
+              entities[entityName] = val;
               entityCount++;
             }
           } else if (hasBody && hasSeq(xmlData, "!ELEMENT", i)) {
@@ -37102,7 +38404,7 @@ var DocTypeReader = class {
           exp += xmlData[i];
         }
       }
-      if (angleBracketsCount !== 0) {
+      if (quoteChar !== null || angleBracketsCount !== 0) {
         throw new Error(`Unclosed DOCTYPE`);
       }
     } else {
@@ -37112,12 +38414,12 @@ var DocTypeReader = class {
   }
   readEntityExp(xmlData, i) {
     i = skipWhitespace(xmlData, i);
-    let entityName = "";
+    const startIndex = i;
     while (i < xmlData.length && !/\s/.test(xmlData[i]) && xmlData[i] !== '"' && xmlData[i] !== "'") {
-      entityName += xmlData[i];
       i++;
     }
-    validateEntityName(entityName);
+    let entityName = xmlData.substring(startIndex, i);
+    validateEntityName2(entityName, { xmlVersion: this.xmlVersion });
     i = skipWhitespace(xmlData, i);
     if (!this.suppressValidationErr) {
       if (xmlData.substring(i, i + 6).toUpperCase() === "SYSTEM") {
@@ -37128,7 +38430,7 @@ var DocTypeReader = class {
     }
     let entityValue = "";
     [i, entityValue] = this.readIdentifierVal(xmlData, i, "entity");
-    if (this.options.enabled !== false && this.options.maxEntitySize && entityValue.length > this.options.maxEntitySize) {
+    if (this.options.enabled !== false && this.options.maxEntitySize != null && entityValue.length > this.options.maxEntitySize) {
       throw new Error(
         `Entity "${entityName}" size (${entityValue.length}) exceeds maximum allowed size (${this.options.maxEntitySize})`
       );
@@ -37138,12 +38440,12 @@ var DocTypeReader = class {
   }
   readNotationExp(xmlData, i) {
     i = skipWhitespace(xmlData, i);
-    let notationName = "";
+    const startIndex = i;
     while (i < xmlData.length && !/\s/.test(xmlData[i])) {
-      notationName += xmlData[i];
       i++;
     }
-    !this.suppressValidationErr && validateEntityName(notationName);
+    let notationName = xmlData.substring(startIndex, i);
+    !this.suppressValidationErr && validateEntityName2(notationName, { xmlVersion: this.xmlVersion });
     i = skipWhitespace(xmlData, i);
     const identifierType = xmlData.substring(i, i + 6).toUpperCase();
     if (!this.suppressValidationErr && identifierType !== "SYSTEM" && identifierType !== "PUBLIC") {
@@ -37174,10 +38476,11 @@ var DocTypeReader = class {
       throw new Error(`Expected quoted string, found "${startChar}"`);
     }
     i++;
+    const startIndex = i;
     while (i < xmlData.length && xmlData[i] !== startChar) {
-      identifierVal += xmlData[i];
       i++;
     }
+    identifierVal = xmlData.substring(startIndex, i);
     if (xmlData[i] !== startChar) {
       throw new Error(`Unterminated ${type} value`);
     }
@@ -37186,12 +38489,12 @@ var DocTypeReader = class {
   }
   readElementExp(xmlData, i) {
     i = skipWhitespace(xmlData, i);
-    let elementName = "";
+    const startIndex = i;
     while (i < xmlData.length && !/\s/.test(xmlData[i])) {
-      elementName += xmlData[i];
       i++;
     }
-    if (!this.suppressValidationErr && !isName(elementName)) {
+    let elementName = xmlData.substring(startIndex, i);
+    if (!this.suppressValidationErr && !qName(elementName, { xmlVersion: this.xmlVersion })) {
       throw new Error(`Invalid element name: "${elementName}"`);
     }
     i = skipWhitespace(xmlData, i);
@@ -37200,10 +38503,11 @@ var DocTypeReader = class {
     else if (xmlData[i] === "A" && hasSeq(xmlData, "NY", i)) i += 2;
     else if (xmlData[i] === "(") {
       i++;
+      const startIndex2 = i;
       while (i < xmlData.length && xmlData[i] !== ")") {
-        contentModel += xmlData[i];
         i++;
       }
+      contentModel = xmlData.substring(startIndex2, i);
       if (xmlData[i] !== ")") {
         throw new Error("Unterminated content model");
       }
@@ -37218,19 +38522,19 @@ var DocTypeReader = class {
   }
   readAttlistExp(xmlData, i) {
     i = skipWhitespace(xmlData, i);
-    let elementName = "";
+    let startIndex = i;
     while (i < xmlData.length && !/\s/.test(xmlData[i])) {
-      elementName += xmlData[i];
       i++;
     }
-    validateEntityName(elementName);
+    let elementName = xmlData.substring(startIndex, i);
+    validateEntityName2(elementName, { xmlVersion: this.xmlVersion });
     i = skipWhitespace(xmlData, i);
-    let attributeName = "";
+    startIndex = i;
     while (i < xmlData.length && !/\s/.test(xmlData[i])) {
-      attributeName += xmlData[i];
       i++;
     }
-    if (!validateEntityName(attributeName)) {
+    let attributeName = xmlData.substring(startIndex, i);
+    if (!validateEntityName2(attributeName, { xmlVersion: this.xmlVersion })) {
       throw new Error(`Invalid attribute name: "${attributeName}"`);
     }
     i = skipWhitespace(xmlData, i);
@@ -37245,13 +38549,13 @@ var DocTypeReader = class {
       i++;
       let allowedNotations = [];
       while (i < xmlData.length && xmlData[i] !== ")") {
-        let notation = "";
+        const startIndex2 = i;
         while (i < xmlData.length && xmlData[i] !== "|" && xmlData[i] !== ")") {
-          notation += xmlData[i];
           i++;
         }
+        let notation = xmlData.substring(startIndex2, i);
         notation = notation.trim();
-        if (!validateEntityName(notation)) {
+        if (!validateEntityName2(notation, { xmlVersion: this.xmlVersion })) {
           throw new Error(`Invalid notation name: "${notation}"`);
         }
         allowedNotations.push(notation);
@@ -37266,10 +38570,11 @@ var DocTypeReader = class {
       i++;
       attributeType += " (" + allowedNotations.join("|") + ")";
     } else {
+      const startIndex2 = i;
       while (i < xmlData.length && !/\s/.test(xmlData[i])) {
-        attributeType += xmlData[i];
         i++;
       }
+      attributeType += xmlData.substring(startIndex2, i);
       const validTypes = ["CDATA", "ID", "IDREF", "IDREFS", "ENTITY", "ENTITIES", "NMTOKEN", "NMTOKENS"];
       if (!this.suppressValidationErr && !validTypes.includes(attributeType.toUpperCase())) {
         throw new Error(`Invalid attribute type: "${attributeType}"`);
@@ -37308,37 +38613,281 @@ function hasSeq(data, seq, i) {
   return true;
 }
 __name(hasSeq, "hasSeq");
-function validateEntityName(name) {
-  if (isName(name))
+function validateEntityName2(name, xmlVersion) {
+  if (qName(name, { xmlVersion }))
     return name;
   else
     throw new Error(`Invalid entity name ${name}`);
 }
-__name(validateEntityName, "validateEntityName");
+__name(validateEntityName2, "validateEntityName");
+
+// node_modules/anynum/digitTable.js
+var SCRIPT_ZEROS = [
+  // Basic Latin (ASCII) — included for completeness / pass-through
+  48,
+  // 0-9
+  // Arabic scripts
+  1632,
+  // Arabic-Indic ٠١٢٣٤٥٦٧٨٩
+  1776,
+  // Extended Arabic-Indic (Urdu/Persian/Sindhi) ۰۱۲۳
+  // Indic scripts
+  2406,
+  // Devanagari ०१२३४५६७८९
+  2534,
+  // Bengali ০১২৩৪৫৬৭৮৯
+  2662,
+  // Gurmukhi ੦੧੨੩੪੫੬੭੮੯
+  2790,
+  // Gujarati ૦૧૨૩૪૫૬૭૮૯
+  2918,
+  // Odia ୦୧୨୩୪୫୬୭୮୯
+  3046,
+  // Tamil ௦௧௨௩௪௫௬௭௮௯
+  3174,
+  // Telugu ౦౧౨౩౪౫౬౭౮౯
+  3302,
+  // Kannada ೦೧೨೩೪೫೬೭೮೯
+  3430,
+  // Malayalam ൦൧൨൩൪൫൬൭൮൯
+  3558,
+  // Sinhala Archaic ෦෧෨෩෪෫෬෭෮෯
+  // Southeast Asian scripts
+  3664,
+  // Thai ๐๑๒๓๔๕๖๗๘๙
+  3792,
+  // Lao ໐໑໒໓໔໕໖໗໘໙
+  3872,
+  // Tibetan ༠༡༢༣༤༥༦༧༨༩
+  4160,
+  // Myanmar ၀၁၂၃၄၅၆၇၈၉
+  4240,
+  // Myanmar Shan ႐႑႒႓႔႕႖႗႘႙
+  6112,
+  // Khmer ០១២៣៤៥៦៧៨៩
+  6160,
+  // Mongolian ᠐᠑᠒᠓᠔᠕᠖᠗᠘᠙
+  6470,
+  // Limbu ᥆᥇᥈᥉᥊᥋᥌᥍᥎᥏
+  6608,
+  // New Tai Lue ᧐᧑᧒᧓᧔᧕᧖᧗᧘᧙
+  6784,
+  // Tai Tham Hora ᪀᪁᪂᪃᪄᪅᪆᪇᪈᪉
+  6800,
+  // Tai Tham Tham ᪐᪑᪒᪓᪔᪕᪖᪗᪘᪙
+  6992,
+  // Balinese ᭐᭑᭒᭓᭔᭕᭖᭗᭘᭙
+  7088,
+  // Sundanese ᮰᮱᮲᮳᮴᮵᮶᮷᮸᮹
+  7232,
+  // Lepcha ᱀᱁᱂᱃᱄᱅᱆᱇᱈᱉
+  7248,
+  // Ol Chiki ᱐᱑᱒᱓᱔᱕᱖᱗᱘᱙
+  // Fullwidth (CJK context)
+  65296,
+  // Fullwidth ０１２３４５６７８９
+  // Mathematical digit variants (Unicode math block)
+  120782,
+  // Mathematical Bold
+  120792,
+  // Mathematical Double-Struck
+  120802,
+  // Mathematical Sans-Serif
+  120812,
+  // Mathematical Sans-Serif Bold
+  120822,
+  // Mathematical Monospace
+  // Other scripts
+  66720,
+  // Osmanya 𐒠𐒡𐒢𐒣𐒤𐒥𐒦𐒧𐒨𐒩
+  68912,
+  // Hanifi Rohingya 𐴰𐴱𐴲𐴳𐴴𐴵𐴶𐴷𐴸𐴹
+  69734,
+  // Brahmi 𑁦𑁧𑁨𑁩𑁪𑁫𑁬𑁭𑁮𑁯
+  69872,
+  // Sora Sompeng 𑃰𑃱𑃲𑃳𑃴𑃵𑃶𑃷𑃸𑃹
+  69942,
+  // Chakma 𑄶𑄷𑄸𑄹𑄺𑄻𑄼𑄽𑄾𑄿
+  70096,
+  // Sharada 𑇐𑇑𑇒𑇓𑇔𑇕𑇖𑇗𑇘𑇙
+  70384,
+  // Khudawadi 𑋰𑋱𑋲𑋳𑋴𑋵𑋶𑋷𑋸𑋹
+  70736,
+  // Newa 𑑐𑑑𑑒𑑓𑑔𑑕𑑖𑑗𑑘𑑙
+  70864,
+  // Tirhuta 𑓐𑓑𑓒𑓓𑓔𑓕𑓖𑓗𑓘𑓙
+  71248,
+  // Modi 𑙐𑙑𑙒𑙓𑙔𑙕𑙖𑙗𑙘𑙙
+  71360,
+  // Takri 𑛀𑛁𑛂𑛃𑛄𑛅𑛆𑛇𑛈𑛉
+  71472,
+  // Ahom 𑜰𑜱𑜲𑜳𑜴𑜵𑜶𑜷𑜸𑜹
+  71904,
+  // Warang Citi 𑣠𑣡𑣢𑣣𑣤𑣥𑣦𑣧𑣨𑣩
+  72016,
+  // Dives Akuru 𑥐𑥑𑥒𑥓𑥔𑥕𑥖𑥗𑥘𑥙
+  72688,
+  // Khitan Small Script 𑯰𑯱𑯲𑯳𑯴𑯵𑯶𑯷𑯸𑯹
+  72784,
+  // Bhaiksuki 𑱐𑱑𑱒𑱓𑱔𑱕𑱖𑱗𑱘𑱙
+  73040,
+  // Masaram Gondi 𑵐𑵑𑵒𑵓𑵔𑵕𑵖𑵗𑵘𑵙
+  73120,
+  // Gunjala Gondi 𑶠𑶡𑶢𑶣𑶤𑶥𑶦𑶧𑶨𑶩
+  73552,
+  // Kawi 𑽐𑽑𑽒𑽓𑽔𑽕𑽖𑽗𑽘𑽙
+  92768,
+  // Mro 𖩠𖩡𖩢𖩣𖩤𖩥𖩦𖩧𖩨𖩩
+  92864,
+  // Tangsa 𖫀𖫁𖫂𖫃𖫄𖫅𖫆𖫇𖫈𖫉
+  93008,
+  // Pahawh Hmong 𖭐𖭑𖭒𖭓𖭔𖭕𖭖𖭗𖭘𖭙
+  123200,
+  // Nyiakeng Puachue Hmong 𞅀𞅁𞅂𞅃𞅄𞅅𞅆𞅇𞅈𞅉
+  123632,
+  // Wancho 𞋰𞋱𞋲𞋳𞋴𞋵𞋶𞋷𞋸𞋹
+  124144,
+  // Nag Mundari 𞓰𞓱𞓲𞓳𞓴𞓵𞓶𞓷𞓸𞓹
+  125264,
+  // Adlam 𞥐𞥑𞥒𞥓𞥔𞥕𞥖𞥗𞥘𞥙
+  130032
+  // Segmented digit symbols 🯰🯱🯲🯳🯴🯵🯶🯷🯸🯹
+];
+var NOT_DIGIT = 255;
+var HIGH_MAP = /* @__PURE__ */ new Map();
+var LOW_MAX = 65535;
+var LOW_MIN = 1632;
+var TABLE_OFFSET = LOW_MIN;
+var TABLE_SIZE = LOW_MAX - LOW_MIN + 1;
+var TABLE = new Uint8Array(TABLE_SIZE).fill(NOT_DIGIT);
+for (const zero of SCRIPT_ZEROS) {
+  for (let d = 0; d < 10; d++) {
+    const cp2 = zero + d;
+    if (cp2 <= LOW_MAX) {
+      TABLE[cp2 - TABLE_OFFSET] = d;
+    } else {
+      HIGH_MAP.set(cp2, d);
+    }
+  }
+}
+
+// node_modules/anynum/anynum.js
+var CHAR_0 = 48;
+var CHAR_9 = 57;
+var CHAR_MINUS = 45;
+var MINUS_SET = /* @__PURE__ */ new Set([8722, 65293, 65123]);
+function anynum(str) {
+  if (typeof str !== "string") return str;
+  const len = str.length;
+  if (len === 0) return str;
+  let firstHit = -1;
+  for (let i = 0; i < len; i++) {
+    const cc = str.charCodeAt(i);
+    if (cc >= CHAR_0 && cc <= CHAR_9 || cc === CHAR_MINUS) continue;
+    if (cc < TABLE_OFFSET) {
+      if (MINUS_SET.has(cc)) {
+        firstHit = i;
+        break;
+      }
+      continue;
+    }
+    if (cc >= 55296 && cc <= 56319) {
+      if (i + 1 < len) {
+        const low = str.charCodeAt(i + 1);
+        if (low >= 56320 && low <= 57343) {
+          const cp2 = 65536 + (cc - 55296 << 10) + (low - 56320);
+          if (HIGH_MAP.has(cp2)) {
+            firstHit = i;
+            break;
+          }
+        }
+      }
+      continue;
+    }
+    if (TABLE[cc - TABLE_OFFSET] !== NOT_DIGIT || MINUS_SET.has(cc)) {
+      firstHit = i;
+      break;
+    }
+  }
+  if (firstHit === -1) return str;
+  const chars = [];
+  if (firstHit > 0) chars.push(str.slice(0, firstHit));
+  for (let i = firstHit; i < len; i++) {
+    const cc = str.charCodeAt(i);
+    if (cc >= CHAR_0 && cc <= CHAR_9 || cc === CHAR_MINUS) {
+      chars.push(str[i]);
+      continue;
+    }
+    if (cc < TABLE_OFFSET) {
+      chars.push(MINUS_SET.has(cc) ? "-" : str[i]);
+      continue;
+    }
+    if (cc >= 55296 && cc <= 56319) {
+      if (i + 1 < len) {
+        const low = str.charCodeAt(i + 1);
+        if (low >= 56320 && low <= 57343) {
+          const cp2 = 65536 + (cc - 55296 << 10) + (low - 56320);
+          const d2 = HIGH_MAP.get(cp2);
+          if (d2 !== void 0) {
+            chars.push(String.fromCharCode(d2 + 48));
+            i++;
+            continue;
+          }
+        }
+      }
+      chars.push(str[i]);
+      continue;
+    }
+    if (MINUS_SET.has(cc)) {
+      chars.push("-");
+      continue;
+    }
+    const d = TABLE[cc - TABLE_OFFSET];
+    chars.push(d !== NOT_DIGIT ? String.fromCharCode(d + 48) : str[i]);
+  }
+  return chars.join("");
+}
+__name(anynum, "anynum");
+var anynum_default = anynum;
 
 // node_modules/strnum/strnum.js
 var hexRegex = /^[-+]?0x[a-fA-F0-9]+$/;
+var binRegex = /^0b[01]+$/;
+var octRegex = /^0o[0-7]+$/;
 var numRegex = /^([\-\+])?(0*)([0-9]*(\.[0-9]*)?)$/;
 var consider = {
   hex: true,
-  // oct: false,
+  binary: false,
+  octal: false,
   leadingZeros: true,
   decimalPoint: ".",
   eNotation: true,
   //skipLike: /regex/,
-  infinity: "original"
+  infinity: "original",
   // "null", "infinity" (Infinity type), "string" ("Infinity" (the string literal))
+  unicode: false
 };
 function toNumber(str, options = {}) {
   options = Object.assign({}, consider, options);
   if (!str || typeof str !== "string") return str;
   let trimmedStr = str.trim();
-  if (options.skipLike !== void 0 && options.skipLike.test(trimmedStr)) return str;
-  else if (str === "0") return 0;
-  else if (options.hex && hexRegex.test(trimmedStr)) {
+  if (trimmedStr.length === 0) return str;
+  else if (options.skipLike !== void 0 && options.skipLike.test(trimmedStr)) return str;
+  else if (trimmedStr === "0") return 0;
+  if (options.unicode) {
+    trimmedStr = anynum_default(trimmedStr);
+    if (trimmedStr === "0") return 0;
+  }
+  if (options.hex && hexRegex.test(trimmedStr)) {
     return parse_int(trimmedStr, 16);
+  } else if (options.binary && binRegex.test(trimmedStr)) {
+    return parse_int(trimmedStr, 2);
+  } else if (options.octal && octRegex.test(trimmedStr)) {
+    return parse_int(trimmedStr, 8);
   } else if (!isFinite(trimmedStr)) {
-    return handleInfinity(str, Number(trimmedStr), options);
+    const num = Number(trimmedStr);
+    if (Number.isNaN(num)) return str;
+    return handleInfinity(str, num, options);
   } else if (trimmedStr.includes("e") || trimmedStr.includes("E")) {
     return resolveEnotation(str, trimmedStr, options);
   } else {
@@ -37349,8 +38898,8 @@ function toNumber(str, options = {}) {
       let numTrimmedByZeros = trimZeros(match4[3]);
       const decimalAdjacentToLeadingZeros = sign ? (
         // 0., -00., 000.
-        str[leadingZeros.length + 1] === "."
-      ) : str[leadingZeros.length] === ".";
+        trimmedStr[leadingZeros.length + 1] === "."
+      ) : trimmedStr[leadingZeros.length] === ".";
       if (!options.leadingZeros && (leadingZeros.length > 1 || leadingZeros.length === 1 && !decimalAdjacentToLeadingZeros)) {
         return str;
       } else {
@@ -37389,15 +38938,18 @@ function resolveEnotation(str, trimmedStr, options) {
     const leadingZeros = notation[2];
     const eAdjacentToLeadingZeros = sign ? (
       // 0E.
-      str[leadingZeros.length + 1] === eChar
-    ) : str[leadingZeros.length] === eChar;
+      trimmedStr[leadingZeros.length + 1] === eChar
+    ) : trimmedStr[leadingZeros.length] === eChar;
     if (leadingZeros.length > 1 && eAdjacentToLeadingZeros) return str;
     else if (leadingZeros.length === 1 && (notation[3].startsWith(`.${eChar}`) || notation[3][0] === eChar)) {
       return Number(trimmedStr);
-    } else if (options.leadingZeros && !eAdjacentToLeadingZeros) {
-      trimmedStr = (notation[1] || "") + notation[3];
+    } else if (leadingZeros.length > 0) {
+      if (options.leadingZeros && !eAdjacentToLeadingZeros) {
+        return Number(trimmedStr);
+      } else return str;
+    } else {
       return Number(trimmedStr);
-    } else return str;
+    }
   } else {
     return str;
   }
@@ -37405,7 +38957,9 @@ function resolveEnotation(str, trimmedStr, options) {
 __name(resolveEnotation, "resolveEnotation");
 function trimZeros(numStr) {
   if (numStr && numStr.indexOf(".") !== -1) {
-    numStr = numStr.replace(/0+$/, "");
+    let end = numStr.length;
+    while (end > 0 && numStr.charCodeAt(end - 1) === 48) end--;
+    numStr = numStr.slice(0, end);
     if (numStr === ".") numStr = "0";
     else if (numStr[0] === ".") numStr = "0" + numStr;
     else if (numStr[numStr.length - 1] === ".") numStr = numStr.substring(0, numStr.length - 1);
@@ -37415,6 +38969,8 @@ function trimZeros(numStr) {
 }
 __name(trimZeros, "trimZeros");
 function parse_int(numStr, base) {
+  const str = numStr.trim();
+  if (base === 2 || base === 8) numStr = str.substring(2);
   if (parseInt) return parseInt(numStr, base);
   else if (Number.parseInt) return Number.parseInt(numStr, base);
   else if (window && window.parseInt) return window.parseInt(numStr, base);
@@ -37470,10 +39026,11 @@ var Expression = class {
    * @param {Object} options - Configuration options
    * @param {string} options.separator - Path separator (default: '.')
    */
-  constructor(pattern, options = {}) {
+  constructor(pattern, options = {}, data) {
     this.pattern = pattern;
     this.separator = options.separator || ".";
     this.segments = this._parse(pattern);
+    this.data = data;
     this._hasDeepWildcard = this.segments.some((seg) => seg.type === "deep-wildcard");
     this._hasAttributeCondition = this.segments.some((seg) => seg.attrName !== void 0);
     this._hasPositionSelector = this.segments.some((seg) => seg.position !== void 0);
@@ -37624,44 +39181,358 @@ var Expression = class {
   }
 };
 
+// node_modules/path-expression-matcher/src/ExpressionSet.js
+var ExpressionSet = class {
+  static {
+    __name(this, "ExpressionSet");
+  }
+  constructor() {
+    this._byDepthAndTag = /* @__PURE__ */ new Map();
+    this._wildcardByDepth = /* @__PURE__ */ new Map();
+    this._deepWildcards = [];
+    this._deepByTerminalTag = /* @__PURE__ */ new Map();
+    this._patterns = /* @__PURE__ */ new Set();
+    this._sealed = false;
+  }
+  /**
+   * Add an Expression to the set.
+   * Duplicate patterns (same pattern string) are silently ignored.
+   *
+   * @param {import('./Expression.js').default} expression - A pre-constructed Expression instance
+   * @returns {this} for chaining
+   * @throws {TypeError} if called after seal()
+   *
+   * @example
+   * set.add(new Expression('root.users.user'));
+   * set.add(new Expression('..script'));
+   */
+  add(expression) {
+    if (this._sealed) {
+      throw new TypeError(
+        "ExpressionSet is sealed. Create a new ExpressionSet to add more expressions."
+      );
+    }
+    if (this._patterns.has(expression.pattern)) return this;
+    this._patterns.add(expression.pattern);
+    if (expression.hasDeepWildcard()) {
+      const lastSeg2 = expression.segments[expression.segments.length - 1];
+      if (lastSeg2 && lastSeg2.type !== "deep-wildcard" && lastSeg2.tag !== "*") {
+        const tag2 = lastSeg2.tag;
+        if (!this._deepByTerminalTag.has(tag2)) this._deepByTerminalTag.set(tag2, []);
+        this._deepByTerminalTag.get(tag2).push(expression);
+      } else {
+        this._deepWildcards.push(expression);
+      }
+      return this;
+    }
+    const depth = expression.length;
+    const lastSeg = expression.segments[expression.segments.length - 1];
+    const tag = lastSeg?.tag;
+    if (!tag || tag === "*") {
+      if (!this._wildcardByDepth.has(depth)) this._wildcardByDepth.set(depth, []);
+      this._wildcardByDepth.get(depth).push(expression);
+    } else {
+      const key = `${depth}:${tag}`;
+      if (!this._byDepthAndTag.has(key)) this._byDepthAndTag.set(key, []);
+      this._byDepthAndTag.get(key).push(expression);
+    }
+    return this;
+  }
+  /**
+   * Add multiple expressions at once.
+   *
+   * @param {import('./Expression.js').default[]} expressions - Array of Expression instances
+   * @returns {this} for chaining
+   *
+   * @example
+   * set.addAll([
+   *   new Expression('root.users.user'),
+   *   new Expression('root.config.setting'),
+   * ]);
+   */
+  addAll(expressions) {
+    for (const expr of expressions) this.add(expr);
+    return this;
+  }
+  /**
+   * Check whether a pattern string is already present in the set.
+   *
+   * @param {import('./Expression.js').default} expression
+   * @returns {boolean}
+   */
+  has(expression) {
+    return this._patterns.has(expression.pattern);
+  }
+  /**
+   * Number of expressions in the set.
+   * @type {number}
+   */
+  get size() {
+    return this._patterns.size;
+  }
+  /**
+   * Seal the set against further modifications.
+   * Useful to prevent accidental mutations after config is built.
+   * Calling add() or addAll() on a sealed set throws a TypeError.
+   *
+   * @returns {this}
+   */
+  seal() {
+    this._sealed = true;
+    return this;
+  }
+  /**
+   * Whether the set has been sealed.
+   * @type {boolean}
+   */
+  get isSealed() {
+    return this._sealed;
+  }
+  /**
+   * Test whether the matcher's current path matches any expression in the set.
+   *
+   * Evaluation order (cheapest → most expensive):
+   *  1. Exact depth + tag bucket  — O(1) lookup, typically 0–2 expressions
+   *  2. Depth-only wildcard bucket — O(1) lookup, rare
+   *  3. Deep-wildcard list         — always checked, but usually small
+   *
+   * @param {import('./Matcher.js').default} matcher - Matcher instance (or readOnly view)
+   * @returns {boolean} true if any expression matches the current path
+   *
+   * @example
+   * if (stopNodes.matchesAny(matcher)) {
+   *   // handle stop node
+   * }
+   */
+  matchesAny(matcher) {
+    return this.findMatch(matcher) !== null;
+  }
+  /**
+  * Find and return the first Expression that matches the matcher's current path.
+  *
+  * Uses the same evaluation order as matchesAny (cheapest → most expensive):
+  *  1. Exact depth + tag bucket
+  *  2. Depth-only wildcard bucket
+  *  3. Deep-wildcard list
+  *
+  * @param {import('./Matcher.js').default} matcher - Matcher instance (or readOnly view)
+  * @returns {import('./Expression.js').default | null} the first matching Expression, or null
+  *
+  * @example
+  * const expr = stopNodes.findMatch(matcher);
+  * if (expr) {
+  *   // access expr.config, expr.pattern, etc.
+  * }
+  */
+  findMatch(matcher) {
+    const depth = matcher.getDepth();
+    const tag = matcher.getCurrentTag();
+    const exactKey = `${depth}:${tag}`;
+    const exactBucket = this._byDepthAndTag.get(exactKey);
+    if (exactBucket) {
+      for (let i = 0; i < exactBucket.length; i++) {
+        if (matcher.matches(exactBucket[i])) return exactBucket[i];
+      }
+    }
+    const wildcardBucket = this._wildcardByDepth.get(depth);
+    if (wildcardBucket) {
+      for (let i = 0; i < wildcardBucket.length; i++) {
+        if (matcher.matches(wildcardBucket[i])) return wildcardBucket[i];
+      }
+    }
+    const deepBucket = this._deepByTerminalTag.get(tag);
+    if (deepBucket) {
+      for (let i = 0; i < deepBucket.length; i++) {
+        if (matcher.matches(deepBucket[i])) return deepBucket[i];
+      }
+    }
+    for (let i = 0; i < this._deepWildcards.length; i++) {
+      if (matcher.matches(this._deepWildcards[i])) return this._deepWildcards[i];
+    }
+    return null;
+  }
+};
+
 // node_modules/path-expression-matcher/src/Matcher.js
+var MatcherView = class {
+  static {
+    __name(this, "MatcherView");
+  }
+  /**
+   * @param {Matcher} matcher - The parent Matcher instance to read from.
+   */
+  constructor(matcher) {
+    this._matcher = matcher;
+  }
+  /**
+   * Get the path separator used by the parent matcher.
+   * @returns {string}
+   */
+  get separator() {
+    return this._matcher.separator;
+  }
+  /**
+   * Get current tag name.
+   * @returns {string|undefined}
+   */
+  getCurrentTag() {
+    const path21 = this._matcher.path;
+    return path21.length > 0 ? path21[path21.length - 1].tag : void 0;
+  }
+  /**
+   * Get current namespace.
+   * @returns {string|undefined}
+   */
+  getCurrentNamespace() {
+    const path21 = this._matcher.path;
+    return path21.length > 0 ? path21[path21.length - 1].namespace : void 0;
+  }
+  /**
+   * Get current node's attribute value.
+   * @param {string} attrName
+   * @returns {*}
+   */
+  getAttrValue(attrName) {
+    const path21 = this._matcher.path;
+    if (path21.length === 0) return void 0;
+    return path21[path21.length - 1].values?.[attrName];
+  }
+  /**
+   * Check if current node has an attribute.
+   * @param {string} attrName
+   * @returns {boolean}
+   */
+  hasAttr(attrName) {
+    const path21 = this._matcher.path;
+    if (path21.length === 0) return false;
+    const current = path21[path21.length - 1];
+    return current.values !== void 0 && attrName in current.values;
+  }
+  /**
+   * Get the value of a "kept" attribute from the nearest ancestor (or
+   * current node) that declared it via `push(tag, attrs, ns, { keep: [...] })`.
+   * @param {string} attrName
+   * @returns {*}
+   */
+  getAnyParentAttr(attrName) {
+    return this._matcher.getAnyParentAttr(attrName);
+  }
+  /**
+   * Check whether any ancestor (or the current node) kept the given
+   * attribute via `push(tag, attrs, ns, { keep: [...] })`.
+   * @param {string} attrName
+   * @returns {boolean}
+   */
+  hasAnyParentAttr(attrName) {
+    return this._matcher.hasAnyParentAttr(attrName);
+  }
+  /**
+   * Get current node's sibling position (child index in parent).
+   * @returns {number}
+   */
+  getPosition() {
+    const path21 = this._matcher.path;
+    if (path21.length === 0) return -1;
+    return path21[path21.length - 1].position ?? 0;
+  }
+  /**
+   * Get current node's repeat counter (occurrence count of this tag name).
+   * @returns {number}
+   */
+  getCounter() {
+    const path21 = this._matcher.path;
+    if (path21.length === 0) return -1;
+    return path21[path21.length - 1].counter ?? 0;
+  }
+  /**
+   * Get current node's sibling index (alias for getPosition).
+   * @returns {number}
+   * @deprecated Use getPosition() or getCounter() instead
+   */
+  getIndex() {
+    return this.getPosition();
+  }
+  /**
+   * Get current path depth.
+   * @returns {number}
+   */
+  getDepth() {
+    return this._matcher.path.length;
+  }
+  /**
+   * Get path as string.
+   * @param {string} [separator] - Optional separator (uses default if not provided)
+   * @param {boolean} [includeNamespace=true]
+   * @returns {string}
+   */
+  toString(separator, includeNamespace = true) {
+    return this._matcher.toString(separator, includeNamespace);
+  }
+  /**
+   * Get path as array of tag names.
+   * @returns {string[]}
+   */
+  toArray() {
+    return this._matcher.path.map((n) => n.tag);
+  }
+  /**
+   * Match current path against an Expression.
+   * @param {Expression} expression
+   * @returns {boolean}
+   */
+  matches(expression) {
+    return this._matcher.matches(expression);
+  }
+  /**
+   * Match any expression in the given set against the current path.
+   * @param {ExpressionSet} exprSet
+   * @returns {boolean}
+   */
+  matchesAny(exprSet) {
+    return exprSet.matchesAny(this._matcher);
+  }
+};
 var Matcher = class {
   static {
     __name(this, "Matcher");
   }
   /**
-   * Create a new Matcher
-   * @param {Object} options - Configuration options
-   * @param {string} options.separator - Default path separator (default: '.')
+   * Create a new Matcher.
+   * @param {Object} [options={}]
+   * @param {string} [options.separator='.'] - Default path separator
    */
   constructor(options = {}) {
     this.separator = options.separator || ".";
     this.path = [];
     this.siblingStacks = [];
+    this._pathStringCache = null;
+    this._view = new MatcherView(this);
+    this._keptAttrs = [];
   }
   /**
-   * Push a new tag onto the path
-   * @param {string} tagName - Name of the tag
-   * @param {Object} attrValues - Attribute key-value pairs for current node (optional)
-   * @param {string} namespace - Namespace for the tag (optional)
+   * Push a new tag onto the path.
+   * @param {string} tagName
+   * @param {Object|null} [attrValues=null]
+   * @param {string|null} [namespace=null]
+   * @param {Object|null} [options=null]
+   * @param {string[]} [options.keep] - Names of attributes (from attrValues)
    */
-  push(tagName, attrValues = null, namespace = null) {
+  push(tagName, attrValues = null, namespace = null, options = null) {
+    this._pathStringCache = null;
     if (this.path.length > 0) {
-      const prev = this.path[this.path.length - 1];
-      prev.values = void 0;
+      this.path[this.path.length - 1].values = void 0;
     }
     const currentLevel = this.path.length;
-    if (!this.siblingStacks[currentLevel]) {
-      this.siblingStacks[currentLevel] = /* @__PURE__ */ new Map();
+    let level = this.siblingStacks[currentLevel];
+    if (!level) {
+      level = { counts: /* @__PURE__ */ new Map(), total: 0 };
+      this.siblingStacks[currentLevel] = level;
     }
-    const siblings = this.siblingStacks[currentLevel];
     const siblingKey = namespace ? `${namespace}:${tagName}` : tagName;
-    const counter = siblings.get(siblingKey) || 0;
-    let position = 0;
-    for (const count of siblings.values()) {
-      position += count;
-    }
-    siblings.set(siblingKey, counter + 1);
+    const counter = level.counts.get(siblingKey) || 0;
+    const position = level.total;
+    level.counts.set(siblingKey, counter + 1);
+    level.total++;
     const node = {
       tag: tagName,
       position,
@@ -37674,25 +39545,38 @@ var Matcher = class {
       node.values = attrValues;
     }
     this.path.push(node);
+    const depth = this.path.length;
+    const keep = options !== null ? options.keep : null;
+    if (keep !== null && keep !== void 0 && keep.length > 0 && attrValues) {
+      for (let i = 0; i < keep.length; i++) {
+        const name = keep[i];
+        if (attrValues[name] !== void 0) {
+          this._keptAttrs.push({ depth, name, value: attrValues[name] });
+        }
+      }
+    }
   }
   /**
-   * Pop the last tag from the path
+   * Pop the last tag from the path.
    * @returns {Object|undefined} The popped node
    */
   pop() {
-    if (this.path.length === 0) {
-      return void 0;
-    }
+    if (this.path.length === 0) return void 0;
+    this._pathStringCache = null;
     const node = this.path.pop();
     if (this.siblingStacks.length > this.path.length + 1) {
       this.siblingStacks.length = this.path.length + 1;
     }
+    const poppedDepth = this.path.length + 1;
+    while (this._keptAttrs.length > 0 && this._keptAttrs[this._keptAttrs.length - 1].depth >= poppedDepth) {
+      this._keptAttrs.pop();
+    }
     return node;
   }
   /**
-   * Update current node's attribute values
-   * Useful when attributes are parsed after push
-   * @param {Object} attrValues - Attribute values
+   * Update current node's attribute values.
+   * Useful when attributes are parsed after push.
+   * @param {Object} attrValues
    */
   updateCurrent(attrValues) {
     if (this.path.length > 0) {
@@ -37703,32 +39587,31 @@ var Matcher = class {
     }
   }
   /**
-   * Get current tag name
+   * Get current tag name.
    * @returns {string|undefined}
    */
   getCurrentTag() {
     return this.path.length > 0 ? this.path[this.path.length - 1].tag : void 0;
   }
   /**
-   * Get current namespace
+   * Get current namespace.
    * @returns {string|undefined}
    */
   getCurrentNamespace() {
     return this.path.length > 0 ? this.path[this.path.length - 1].namespace : void 0;
   }
   /**
-   * Get current node's attribute value
-   * @param {string} attrName - Attribute name
-   * @returns {*} Attribute value or undefined
+   * Get current node's attribute value.
+   * @param {string} attrName
+   * @returns {*}
    */
   getAttrValue(attrName) {
     if (this.path.length === 0) return void 0;
-    const current = this.path[this.path.length - 1];
-    return current.values?.[attrName];
+    return this.path[this.path.length - 1].values?.[attrName];
   }
   /**
-   * Check if current node has an attribute
-   * @param {string} attrName - Attribute name
+   * Check if current node has an attribute.
+   * @param {string} attrName
    * @returns {boolean}
    */
   hasAttr(attrName) {
@@ -37737,7 +39620,37 @@ var Matcher = class {
     return current.values !== void 0 && attrName in current.values;
   }
   /**
-   * Get current node's sibling position (child index in parent)
+   * Get the value of a "kept" attribute from the nearest ancestor (or
+   * current node) that declared it via `push(tag, attrs, ns, { keep: [...] })`.
+   * Unlike getAttrValue(), this works regardless of how deep the path has
+   * gone since the attribute was pushed — but only for attribute names that
+   * were explicitly marked with `keep` at push time. Cost is proportional to
+   * the number of currently-kept attributes (typically 0-3), not path depth.
+   * @param {string} attrName
+   * @returns {*} the value, or undefined if no ancestor kept this attribute
+   */
+  getAnyParentAttr(attrName) {
+    const kept = this._keptAttrs;
+    for (let i = kept.length - 1; i >= 0; i--) {
+      if (kept[i].name === attrName) return kept[i].value;
+    }
+    return void 0;
+  }
+  /**
+   * Check whether any ancestor (or the current node) kept the given
+   * attribute via `push(tag, attrs, ns, { keep: [...] })`.
+   * @param {string} attrName
+   * @returns {boolean}
+   */
+  hasAnyParentAttr(attrName) {
+    const kept = this._keptAttrs;
+    for (let i = kept.length - 1; i >= 0; i--) {
+      if (kept[i].name === attrName) return true;
+    }
+    return false;
+  }
+  /**
+   * Get current node's sibling position (child index in parent).
    * @returns {number}
    */
   getPosition() {
@@ -37745,7 +39658,7 @@ var Matcher = class {
     return this.path[this.path.length - 1].position ?? 0;
   }
   /**
-   * Get current node's repeat counter (occurrence count of this tag name)
+   * Get current node's repeat counter (occurrence count of this tag name).
    * @returns {number}
    */
   getCounter() {
@@ -37753,7 +39666,7 @@ var Matcher = class {
     return this.path[this.path.length - 1].counter ?? 0;
   }
   /**
-   * Get current node's sibling index (alias for getPosition for backward compatibility)
+   * Get current node's sibling index (alias for getPosition).
    * @returns {number}
    * @deprecated Use getPosition() or getCounter() instead
    */
@@ -37761,45 +39674,55 @@ var Matcher = class {
     return this.getPosition();
   }
   /**
-   * Get current path depth
+   * Get current path depth.
    * @returns {number}
    */
   getDepth() {
     return this.path.length;
   }
   /**
-   * Get path as string
-   * @param {string} separator - Optional separator (uses default if not provided)
-   * @param {boolean} includeNamespace - Whether to include namespace in output (default: true)
+   * Get path as string.
+   * @param {string} [separator] - Optional separator (uses default if not provided)
+   * @param {boolean} [includeNamespace=true]
    * @returns {string}
    */
   toString(separator, includeNamespace = true) {
-    const sep12 = separator || this.separator;
-    return this.path.map((n) => {
-      if (includeNamespace && n.namespace) {
-        return `${n.namespace}:${n.tag}`;
+    const sep13 = separator || this.separator;
+    const isDefault = sep13 === this.separator && includeNamespace === true;
+    if (isDefault) {
+      if (this._pathStringCache !== null) {
+        return this._pathStringCache;
       }
-      return n.tag;
-    }).join(sep12);
+      const result = this.path.map(
+        (n) => n.namespace ? `${n.namespace}:${n.tag}` : n.tag
+      ).join(sep13);
+      this._pathStringCache = result;
+      return result;
+    }
+    return this.path.map(
+      (n) => includeNamespace && n.namespace ? `${n.namespace}:${n.tag}` : n.tag
+    ).join(sep13);
   }
   /**
-   * Get path as array of tag names
+   * Get path as array of tag names.
    * @returns {string[]}
    */
   toArray() {
     return this.path.map((n) => n.tag);
   }
   /**
-   * Reset the path to empty
+   * Reset the path to empty.
    */
   reset() {
+    this._pathStringCache = null;
     this.path = [];
     this.siblingStacks = [];
+    this._keptAttrs = [];
   }
   /**
-   * Match current path against an Expression
-   * @param {Expression} expression - The expression to match against
-   * @returns {boolean} True if current path matches the expression
+   * Match current path against an Expression.
+   * @param {Expression} expression
+   * @returns {boolean}
    */
   matches(expression) {
     const segments = expression.segments;
@@ -37812,7 +39735,6 @@ var Matcher = class {
     return this._matchSimple(segments);
   }
   /**
-   * Match simple path (no deep wildcards)
    * @private
    */
   _matchSimple(segments) {
@@ -37820,17 +39742,13 @@ var Matcher = class {
       return false;
     }
     for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      const node = this.path[i];
-      const isCurrentNode = i === this.path.length - 1;
-      if (!this._matchSegment(segment, node, isCurrentNode)) {
+      if (!this._matchSegment(segments[i], this.path[i], i === this.path.length - 1)) {
         return false;
       }
     }
     return true;
   }
   /**
-   * Match path with deep wildcards
    * @private
    */
   _matchWithDeepWildcard(segments) {
@@ -37846,8 +39764,7 @@ var Matcher = class {
         const nextSeg = segments[segIdx];
         let found = false;
         for (let i = pathIdx; i >= 0; i--) {
-          const isCurrentNode = i === this.path.length - 1;
-          if (this._matchSegment(nextSeg, this.path[i], isCurrentNode)) {
+          if (this._matchSegment(nextSeg, this.path[i], i === this.path.length - 1)) {
             pathIdx = i - 1;
             segIdx--;
             found = true;
@@ -37858,8 +39775,7 @@ var Matcher = class {
           return false;
         }
       } else {
-        const isCurrentNode = pathIdx === this.path.length - 1;
-        if (!this._matchSegment(segment, this.path[pathIdx], isCurrentNode)) {
+        if (!this._matchSegment(segment, this.path[pathIdx], pathIdx === this.path.length - 1)) {
           return false;
         }
         pathIdx--;
@@ -37869,12 +39785,7 @@ var Matcher = class {
     return segIdx < 0;
   }
   /**
-   * Match a single segment against a node
    * @private
-   * @param {Object} segment - Segment from Expression
-   * @param {Object} node - Node from path
-   * @param {boolean} isCurrentNode - Whether this is the current (last) node
-   * @returns {boolean}
    */
   _matchSegment(segment, node, isCurrentNode) {
     if (segment.tag !== "*" && segment.tag !== node.tag) {
@@ -37893,8 +39804,7 @@ var Matcher = class {
         return false;
       }
       if (segment.attrValue !== void 0) {
-        const actualValue = node.values[segment.attrName];
-        if (String(actualValue) !== String(segment.attrValue)) {
+        if (String(node.values[segment.attrName]) !== String(segment.attrValue)) {
           return false;
         }
       }
@@ -37910,33 +39820,787 @@ var Matcher = class {
         return false;
       } else if (segment.position === "even" && counter % 2 !== 0) {
         return false;
-      } else if (segment.position === "nth") {
-        if (counter !== segment.positionValue) {
-          return false;
-        }
+      } else if (segment.position === "nth" && counter !== segment.positionValue) {
+        return false;
       }
     }
     return true;
   }
   /**
-   * Create a snapshot of current state
-   * @returns {Object} State snapshot
+   * Match any expression in the given set against the current path.
+   * @param {ExpressionSet} exprSet
+   * @returns {boolean}
+   */
+  matchesAny(exprSet) {
+    return exprSet.matchesAny(this);
+  }
+  /**
+   * Create a snapshot of current state.
+   * @returns {Object}
    */
   snapshot() {
     return {
       path: this.path.map((node) => ({ ...node })),
-      siblingStacks: this.siblingStacks.map((map) => new Map(map))
+      siblingStacks: this.siblingStacks.map((level) => level ? { counts: new Map(level.counts), total: level.total } : level),
+      keptAttrs: this._keptAttrs.map((entry) => ({ ...entry }))
     };
   }
   /**
-   * Restore state from snapshot
-   * @param {Object} snapshot - State snapshot
+   * Restore state from snapshot.
+   * @param {Object} snapshot
    */
   restore(snapshot2) {
+    this._pathStringCache = null;
     this.path = snapshot2.path.map((node) => ({ ...node }));
-    this.siblingStacks = snapshot2.siblingStacks.map((map) => new Map(map));
+    this.siblingStacks = snapshot2.siblingStacks.map((level) => level ? { counts: new Map(level.counts), total: level.total } : level);
+    this._keptAttrs = (snapshot2.keptAttrs || []).map((entry) => ({ ...entry }));
+  }
+  /**
+   * Return the read-only {@link MatcherView} for this matcher.
+   *
+   * The same instance is returned on every call — no allocation occurs.
+   * It always reflects the current parser state and is safe to pass to
+   * user callbacks without risk of accidental mutation.
+   *
+   * @returns {MatcherView}
+   *
+   * @example
+   * const view = matcher.readOnly();
+   * // pass view to callbacks — it stays in sync automatically
+   * view.matches(expr);       // ✓
+   * view.getCurrentTag();     // ✓
+   * // view.push(...)         // ✗ method does not exist — caught by TypeScript
+   */
+  readOnly() {
+    return this._view;
   }
 };
+
+// node_modules/is-unsafe/src/contexts/html.js
+var HTML_PATTERNS = [
+  {
+    id: "html-script-open",
+    description: "<script opening tag",
+    pattern: /<script[\s>/]/i
+  },
+  {
+    id: "html-script-close",
+    description: "</script closing tag",
+    pattern: /<\/script[\s>]/i
+  },
+  {
+    id: "html-javascript-protocol",
+    description: "javascript: URI scheme (with optional whitespace/encoding)",
+    // Handles j&#x61;vascript:, j\u0061vascript:, and whitespace variants
+    pattern: /j[\t\n\r ]*a[\t\n\r ]*v[\t\n\r ]*a[\t\n\r ]*s[\t\n\r ]*c[\t\n\r ]*r[\t\n\r ]*i[\t\n\r ]*p[\t\n\r ]*t[\t\n\r ]*:/i
+  },
+  {
+    id: "html-vbscript-protocol",
+    description: "vbscript: URI scheme",
+    pattern: /vbscript[\t\n\r ]*:/i
+  },
+  {
+    id: "html-data-html",
+    description: "data:text/html URI \u2014 can execute scripts in browsers",
+    pattern: /data[\t\n\r ]*:[\t\n\r ]*text\/html/i
+  },
+  {
+    id: "html-data-xhtml",
+    description: "data:application/xhtml+xml URI",
+    pattern: /data[\t\n\r ]*:[\t\n\r ]*application\/xhtml/i
+  },
+  {
+    id: "html-data-svg",
+    description: "data:image/svg+xml URI \u2014 can execute scripts",
+    pattern: /data[\t\n\r ]*:[\t\n\r ]*image\/svg\+xml/i
+  },
+  {
+    id: "html-inline-event-handler",
+    description: "Inline event handler attributes: onclick=, onerror=, onload=, etc.",
+    // \bon ensures we match a word boundary so "phonetic=" is not caught
+    pattern: /\bon\w{1,30}\s*=/i
+  },
+  {
+    id: "html-entity-obfuscated-script",
+    description: "HTML-entity-encoded <script (e.g. &#x3C;script or &lt;script)",
+    // Entities include optional trailing semicolon: &#x3C; or &#x3C (both valid in HTML5)
+    pattern: /(?:&#x0*3[Cc];?|&#0*60;?|&lt;)\s*script/i
+  },
+  {
+    id: "html-entity-obfuscated-javascript",
+    description: 'HTML-entity-encoded javascript: (partial \u2014 catches common &#106; or &#x6a; for "j")',
+    pattern: /(?:&#x0*6[Aa];?|&#0*106;?)\s*(?:&#x0*61;?|a)[\s\S]{0,80}script\s*:/i
+  },
+  {
+    id: "html-style-expression",
+    description: "CSS expression() \u2014 IE-era code execution in style attributes",
+    pattern: /style[\s\S]{0,20}expression\s*\(/i
+  },
+  {
+    id: "html-object-embed",
+    description: "<object or <embed tags that can load active content",
+    pattern: /<(?:object|embed)[\s>/]/i
+  },
+  {
+    id: "html-base-tag",
+    description: "<base href= \u2014 can hijack all relative URLs on a page",
+    pattern: /<base[\s>]/i
+  },
+  {
+    id: "html-meta-refresh",
+    description: '<meta http-equiv="refresh" \u2014 can redirect users',
+    pattern: /<meta[\s\S]{0,40}http-equiv[\s\S]{0,20}refresh/i
+  },
+  {
+    id: "html-srcdoc",
+    description: "srcdoc= attribute on iframes \u2014 embeds HTML that can run scripts",
+    pattern: /srcdoc\s*=/i
+  },
+  {
+    id: "html-iframe",
+    description: "<iframe tag",
+    pattern: /<iframe[\s>/]/i
+  },
+  {
+    id: "html-form",
+    description: "<form tag \u2014 can be used for phishing / credential harvesting injection",
+    pattern: /<form[\s>/]/i
+  }
+];
+var html_default = HTML_PATTERNS;
+
+// node_modules/is-unsafe/src/contexts/xml.js
+var XML_PATTERNS = [
+  {
+    id: "xml-cdata-injection",
+    description: "CDATA section injection: <![CDATA[ breaks out of text node context",
+    pattern: /<!\[CDATA\[/i
+  },
+  {
+    id: "xml-cdata-close",
+    description: "CDATA close sequence: ]]> can terminate an enclosing CDATA section",
+    pattern: /\]\]>/
+  },
+  {
+    id: "xml-processing-instruction",
+    description: "XML processing instruction: <?xml-stylesheet or <?php etc.",
+    pattern: /<\?(?:xml[\- ]|php|asp)/i
+  },
+  {
+    id: "xml-doctype-injection",
+    description: "DOCTYPE declaration embedded in content \u2014 can define entities",
+    // Match <!DOCTYPE followed by end-of-string, whitespace, or [ (internal subset)
+    pattern: /<!DOCTYPE(?:[\s[]|$)/i
+  },
+  {
+    id: "xml-entity-system",
+    description: "SYSTEM keyword \u2014 used in external entity declarations (XXE)",
+    pattern: /\bSYSTEM\s+["']/i
+  },
+  {
+    id: "xml-entity-public",
+    description: "PUBLIC keyword \u2014 used in external entity declarations (XXE)",
+    pattern: /\bPUBLIC\s+["']/i
+  },
+  {
+    id: "xml-entity-declaration",
+    description: "<!ENTITY declaration \u2014 defines entities, potential XXE or entity expansion",
+    pattern: /<!ENTITY[\s%]/i
+  },
+  {
+    id: "xml-billion-laughs",
+    description: "Entity reference chaining / billion laughs: repeated &eX; style references",
+    // Heuristic: 3+ consecutive entity refs suggests expansion attack
+    pattern: /(?:&\w{1,20};){3,}/
+  },
+  {
+    id: "xml-namespace-confusion",
+    description: "xmlns: attribute injection \u2014 can redefine namespaces to confuse parsers",
+    // pattern: /\bxmlns\s*(?::\w{1,40})?\s*=/i,
+    pattern: /\bxmlns(?::\w{1,40})?\s*=/i
+  },
+  {
+    id: "xml-comment-injection",
+    description: "<!-- comment injection \u2014 can hide content from some parsers",
+    pattern: /<!--/
+  },
+  {
+    id: "xml-comment-close",
+    description: "--> closes an enclosing XML comment",
+    pattern: /-->/
+  },
+  {
+    id: "xml-pi-close",
+    description: "?> closes an enclosing processing instruction",
+    pattern: /\?>/
+  }
+];
+var xml_default = XML_PATTERNS;
+
+// node_modules/is-unsafe/src/contexts/svg.js
+var SVG_PATTERNS = [
+  {
+    id: "svg-script-element",
+    description: "<script element inside SVG executes JavaScript",
+    pattern: /<script[\s>/]/i
+  },
+  {
+    id: "svg-xlink-href-javascript",
+    description: "xlink:href with javascript: \u2014 classic SVG XSS via <a> or <use>",
+    pattern: /xlink\s*:\s*href\s*=\s*["']?\s*javascript\s*:/i
+  },
+  {
+    id: "svg-href-javascript",
+    description: "href= with javascript: in SVG context (<a>, <animate>, etc.)",
+    pattern: /href\s*=\s*["']?\s*javascript\s*:/i
+  },
+  {
+    id: "svg-foreignobject",
+    description: "<foreignObject embeds HTML inside SVG \u2014 can execute scripts",
+    pattern: /<foreignObject[\s>/]/i
+  },
+  {
+    id: "svg-use-external",
+    description: "<use xlink:href or href pointing to external resource (non-fragment URL)",
+    // Match <use with href= where the value starts with a non-# character (external URL)
+    // [\"'][^#] catches quoted values not starting with #; [^\"'#\s>] catches unquoted
+    pattern: /<use[\s\S]{0,60}(?:xlink\s*:\s*)?href\s*=\s*(?:["'][^#]|[^"'#\s>])/i
+  },
+  {
+    id: "svg-animate-href",
+    description: '<animate attributeName="href" \u2014 can dynamically change href to javascript:',
+    pattern: /<animate[\s\S]{0,80}attributeName\s*=\s*["'][\s]*href["']/i
+  },
+  {
+    id: "svg-animate-xlinkhref",
+    description: '<animate attributeName="xlink:href"',
+    pattern: /<animate[\s\S]{0,80}attributeName\s*=\s*["'][\s]*xlink\s*:\s*href["']/i
+  },
+  {
+    id: "svg-set-javascript",
+    description: '<set to="javascript:..." \u2014 sets an attribute to a javascript: URI',
+    pattern: /<set[\s\S]{0,80}to\s*=\s*["']?\s*javascript\s*:/i
+  },
+  {
+    id: "svg-event-handler",
+    description: "SVG-specific event handler attributes: onload=, onerror=, onactivate=, etc.",
+    pattern: /\bon(?:load|error|activate|begin|end|repeat|focus|blur|click|mouse\w{1,20}|key\w{1,20})\s*=/i
+  },
+  {
+    id: "svg-handler-generic",
+    description: "Generic on* handler catch-all for SVG attributes",
+    pattern: /\bon\w{1,30}\s*=/i
+  },
+  {
+    id: "svg-filter-feimage",
+    description: "<feImage href= \u2014 filter primitive that can load external resources",
+    pattern: /<feImage[\s\S]{0,80}(?:xlink\s*:\s*)?href\s*=/i
+  },
+  {
+    id: "svg-image-external",
+    description: "<image xlink:href with http/https or javascript protocol",
+    pattern: /<image[\s\S]{0,80}(?:xlink\s*:\s*)?href\s*=\s*["']?\s*(?:https?|javascript)\s*:/i
+  },
+  {
+    id: "svg-style-javascript",
+    description: "style= attribute containing javascript: (e.g. background:url(javascript:...))",
+    pattern: /style\s*=[\s\S]{0,60}javascript\s*:/i
+  }
+];
+var svg_default = SVG_PATTERNS;
+
+// node_modules/is-unsafe/src/contexts/sql.js
+var SQL_PATTERNS = [
+  {
+    id: "sql-block-comment-open",
+    description: "SQL block comment open: /* ... */ \u2014 unusual in legitimate user text",
+    pattern: /\/\*/
+  },
+  {
+    id: "sql-union-select",
+    description: "UNION SELECT \u2014 most common SQL injection aggregation attack",
+    pattern: /\bUNION\s{1,20}(?:ALL\s{1,20})?SELECT\b/i
+  },
+  {
+    id: "sql-drop-table",
+    description: "DROP TABLE \u2014 destructive DDL injection",
+    pattern: /\bDROP\s{1,20}TABLE\b/i
+  },
+  {
+    id: "sql-drop-database",
+    description: "DROP DATABASE \u2014 destructive DDL injection",
+    pattern: /\bDROP\s{1,20}DATABASE\b/i
+  },
+  {
+    id: "sql-insert-into",
+    description: "INSERT INTO \u2014 data injection",
+    pattern: /\bINSERT\s{1,20}INTO\b/i
+  },
+  {
+    id: "sql-delete-from",
+    description: "DELETE FROM \u2014 data deletion injection",
+    pattern: /\bDELETE\s{1,20}FROM\b/i
+  },
+  {
+    id: "sql-update-set",
+    description: "UPDATE ... SET \u2014 data modification injection",
+    // Allows arbitrary content between UPDATE and SET (table name, alias, etc.)
+    pattern: /\bUPDATE\b[\s\S]{1,60}\bSET\b/i
+  },
+  {
+    id: "sql-exec-xp",
+    description: "EXEC xp_ \u2014 MSSQL extended stored procedure execution",
+    pattern: /\bEXEC(?:UTE)?\s{1,20}xp_/i
+  },
+  {
+    id: "sql-tautology-string",
+    description: `Classic string tautology: ' OR '1'='1 or " OR "1"="1"`,
+    // Last quote is optional — injection may truncate it: ' OR '1'='1--
+    pattern: /'\s{0,10}OR\s{0,10}'[^']{0,20}'\s*=\s*'[^']{0,20}/i
+  },
+  {
+    id: "sql-tautology-numeric",
+    description: "Numeric tautology: OR 1=1",
+    pattern: /\bOR\s{1,10}1\s*=\s*1\b/i
+  },
+  {
+    id: "sql-always-true-zero",
+    description: "Numeric tautology: OR 0=0",
+    pattern: /\bOR\s{1,10}0\s*=\s*0\b/i
+  },
+  {
+    id: "sql-sleep-benchmark",
+    description: "Time-based blind injection: SLEEP() or BENCHMARK()",
+    pattern: /\b(?:SLEEP|BENCHMARK)\s*\(/i
+  },
+  {
+    id: "sql-waitfor-delay",
+    description: "MSSQL time-based blind injection: WAITFOR DELAY",
+    pattern: /\bWAITFOR\s{1,20}DELAY\b/i
+  },
+  {
+    id: "sql-char-function",
+    description: "CHAR() function \u2014 used to obfuscate injected strings",
+    pattern: /\bCHAR\s*\(\s*\d{1,3}/i
+  },
+  {
+    id: "sql-information-schema",
+    description: "INFORMATION_SCHEMA \u2014 reconnaissance query for table/column enumeration",
+    pattern: /\bINFORMATION_SCHEMA\b/i
+  }
+];
+var sql_default = SQL_PATTERNS;
+
+// node_modules/is-unsafe/src/contexts/shell.js
+var SHELL_PATTERNS = [
+  {
+    id: "shell-path-traversal-unix",
+    description: "Unix path traversal: ../  \u2014 climbing the directory tree",
+    pattern: /\.\.\//
+  },
+  {
+    id: "shell-path-traversal-windows",
+    description: "Windows path traversal: ..\\ \u2014 climbing the directory tree",
+    pattern: /\.\.\\/
+  },
+  {
+    id: "shell-path-traversal-encoded",
+    description: "URL-encoded path traversal: %2e%2e or %2f variants",
+    pattern: /%2e%2e|%2f\.\.|\.\.%2f/i
+  },
+  {
+    id: "shell-null-byte",
+    description: "Null byte injection: \\x00 or %00 \u2014 truncates strings in C-backed functions",
+    pattern: /\x00|%00/
+  },
+  {
+    id: "shell-semicolon",
+    description: "Semicolon command separator: cmd1; cmd2",
+    pattern: /;/
+  },
+  {
+    id: "shell-pipe",
+    description: "Pipe operator: cmd1 | cmd2",
+    pattern: /\|/
+  },
+  {
+    id: "shell-and-operator",
+    description: "AND operator: cmd1 && cmd2",
+    pattern: /&&/
+  },
+  {
+    id: "shell-or-operator",
+    description: "OR operator: cmd1 || cmd2",
+    pattern: /\|\|/
+  },
+  {
+    id: "shell-backtick",
+    description: "Backtick command substitution: `cmd`",
+    pattern: /`/
+  },
+  {
+    id: "shell-dollar-paren",
+    description: "Dollar-paren command substitution: $(cmd)",
+    pattern: /\$\(/
+  },
+  {
+    id: "shell-dollar-brace",
+    description: "Dollar-brace variable expansion: ${var} \u2014 can be abused for injection",
+    pattern: /\$\{/
+  },
+  {
+    id: "shell-redirect-out",
+    description: "Output redirection: cmd > file or cmd >> file",
+    pattern: />{1,2}/
+  },
+  {
+    id: "shell-redirect-in",
+    description: "Input redirection: cmd < file",
+    pattern: /</
+  },
+  {
+    id: "shell-newline-injection",
+    description: "Newline injection: \\n or \\r \u2014 can inject new shell commands",
+    pattern: /[\n\r]/
+  },
+  {
+    id: "shell-glob-star",
+    description: "Glob expansion: * or ? \u2014 can expand to unintended files",
+    // Only flag when combined with path separators to reduce false positives
+    pattern: /[/\\][*?]/
+  },
+  {
+    id: "shell-absolute-root",
+    description: "Absolute root path injection: string starting with / or \\ (Windows UNC)",
+    pattern: /^(?:\/|\\\\)/
+  },
+  {
+    id: "shell-windows-drive",
+    description: "Windows drive letter path injection: C:\\ or D:/",
+    pattern: /^[a-zA-Z]:[/\\]/
+  },
+  {
+    id: "shell-curl-wget",
+    description: "curl/wget with URL or flags \u2014 can exfiltrate data or download payloads",
+    // Require a URL scheme (http/https/ftp) or a flag (-) to reduce false positives
+    // "curl is a tool" won't match; "curl http://..." or "curl -s ..." will
+    pattern: /\b(?:curl|wget)\s+(?:https?:\/\/|ftp:\/\/|-)/i
+  }
+];
+var shell_default = SHELL_PATTERNS;
+
+// node_modules/is-unsafe/src/contexts/redos.js
+var REDOS_PATTERNS = [
+  {
+    id: "redos-nested-quantifier-plus",
+    description: "Nested + quantifier inside a group with outer quantifier: (a+)+, (.+b)*, etc.",
+    // Matches any group containing a + quantifier, with an outer * or + — catches (a+)+, (.+b)*, etc.
+    pattern: /\([^)]*\+[^)]*\)[+*]/
+  },
+  {
+    id: "redos-nested-quantifier-star",
+    description: "Nested * quantifier: (a*)* or (a*)+ \u2014 catastrophic backtracking",
+    pattern: /\([^)]*\*[^)]*\)[*+]/
+  },
+  {
+    id: "redos-nested-groups",
+    description: "Doubly nested quantified groups: ((a+)+) \u2014 guaranteed catastrophic",
+    pattern: /\(\([^)]{0,40}\)[+*]\)[+*]/
+  },
+  {
+    id: "redos-alternation-overlap",
+    description: "Overlapping alternation under quantifier: (a|a)+ \u2014 ambiguous NFA paths",
+    // Detect repeated identical alternatives under a quantifier
+    pattern: /\(([^|()]{1,20})\|(?:\1)(?:\|[^|()]{1,20}){0,5}\)[+*?]{1,2}/
+  },
+  {
+    id: "redos-star-plus-concat",
+    description: "(x*x)+ pattern \u2014 triggers super-linear backtracking",
+    pattern: /\([^)]{0,10}\*[^)]{0,10}\)[+*]/
+  },
+  {
+    id: "redos-dot-star-greedy",
+    description: "(.*){n,} or (.+){n,} \u2014 repeated greedy dot quantifiers",
+    pattern: /\(\.[*+]\)\{?\d/
+  },
+  {
+    id: "redos-large-repetition",
+    description: "Very large fixed or range repetition count {1000,} or {1000,n} \u2014 denial of service via backtracking",
+    // Matches { followed by 4+ digits (≥1000), then optional ,digits }
+    pattern: /\{\d{4,}(?:,\d*)?\}/
+  },
+  {
+    id: "redos-catastrophic-alternation",
+    description: "Long alternation with many similar branches \u2014 polynomial backtracking risk",
+    // Heuristic: 10+ pipe-separated alternatives in a single group
+    pattern: /\([^)]{0,200}(?:\|[^|)]{0,50}){9,}\)/
+  }
+];
+var redos_default = REDOS_PATTERNS;
+
+// node_modules/is-unsafe/src/contexts/nosql.js
+var sep6 = `["'\\s]*:`;
+var NOSQL_PATTERNS = [
+  // ─── MongoDB $ operator injection ────────────────────────────────────────
+  {
+    id: "nosql-where-operator",
+    description: "$where \u2014 executes arbitrary JavaScript server-side in MongoDB",
+    pattern: new RegExp(`\\$where${sep6}`, "i")
+  },
+  {
+    id: "nosql-ne-operator",
+    description: '$ne \u2014 "not equal" operator used to bypass equality checks',
+    pattern: new RegExp(`\\$ne${sep6}`, "i")
+  },
+  {
+    id: "nosql-gt-operator",
+    description: '$gt \u2014 "greater than" used to bypass password/value checks',
+    pattern: new RegExp(`\\$gte?${sep6}`, "i")
+  },
+  {
+    id: "nosql-lt-operator",
+    description: '$lt / $lte \u2014 "less than" bypass variants',
+    pattern: new RegExp(`\\$lte?${sep6}`, "i")
+  },
+  {
+    id: "nosql-regex-operator",
+    description: "$regex \u2014 can be used to extract data character by character (blind injection)",
+    pattern: new RegExp(`\\$regex${sep6}`, "i")
+  },
+  {
+    id: "nosql-or-operator",
+    description: "$or \u2014 logical OR; used to create always-true conditions",
+    pattern: new RegExp(`\\$or${sep6}\\s*\\[`, "i")
+  },
+  {
+    id: "nosql-and-operator",
+    description: "$and \u2014 logical AND operator injection",
+    pattern: new RegExp(`\\$and${sep6}\\s*\\[`, "i")
+  },
+  {
+    id: "nosql-nor-operator",
+    description: "$nor \u2014 logical NOR operator injection",
+    pattern: new RegExp(`\\$nor${sep6}\\s*\\[`, "i")
+  },
+  {
+    id: "nosql-exists-operator",
+    description: "$exists \u2014 can enumerate fields to determine schema",
+    pattern: new RegExp(`\\$exists${sep6}`, "i")
+  },
+  {
+    id: "nosql-in-operator",
+    description: "$in \u2014 matches any value in a list; can enumerate values",
+    pattern: new RegExp(`\\$in${sep6}\\s*\\[`, "i")
+  },
+  {
+    id: "nosql-expr-operator",
+    description: "$expr \u2014 allows aggregation expressions in queries (MongoDB 3.6+)",
+    pattern: new RegExp(`\\$expr${sep6}`, "i")
+  },
+  {
+    id: "nosql-function-operator",
+    description: "$function \u2014 executes arbitrary JavaScript in MongoDB 4.4+",
+    pattern: new RegExp(`\\$function${sep6}`, "i")
+  },
+  {
+    id: "nosql-accumulator-operator",
+    description: "$accumulator \u2014 custom aggregation with arbitrary JS execution",
+    pattern: new RegExp(`\\$accumulator${sep6}`, "i")
+  },
+  // ─── Prototype pollution ─────────────────────────────────────────────────
+  {
+    id: "nosql-proto-pollution",
+    description: "__proto__ \u2014 prototype pollution via object key injection",
+    pattern: /__proto__/
+  },
+  {
+    id: "nosql-constructor-prototype",
+    description: "constructor.prototype \u2014 alternative prototype pollution vector (dot notation or JSON key)",
+    // Matches dot-notation (obj.constructor.prototype) and JSON key adjacency
+    // ("constructor": {"prototype": ...})
+    pattern: /constructor[\s"':.,{\[]*prototype/i
+  },
+  {
+    id: "nosql-proto-bracket",
+    description: '["__proto__"] \u2014 bracket-notation prototype pollution',
+    pattern: /\[["']__proto__["']\]/
+  }
+];
+var nosql_default = NOSQL_PATTERNS;
+
+// node_modules/is-unsafe/src/contexts/log.js
+var LOG_PATTERNS = [
+  // ─── CRLF / newline injection ─────────────────────────────────────────────
+  {
+    id: "log-crlf-injection",
+    description: "CRLF injection: literal \\r or \\n embeds fake log lines",
+    pattern: /[\r\n]/
+  },
+  {
+    id: "log-url-encoded-crlf",
+    description: "URL-encoded CRLF: %0d, %0a, %0D, %0A \u2014 decoded by some log parsers",
+    pattern: /%0[dDaA]/
+  },
+  {
+    id: "log-unicode-newline",
+    description: "Unicode newline variants: U+2028 (line separator), U+2029 (paragraph separator)",
+    pattern: /[\u2028\u2029]/
+  },
+  // ─── Log4Shell / JNDI injection (CVE-2021-44228) ─────────────────────────
+  {
+    id: "log-log4shell-jndi",
+    description: "Log4Shell: ${jndi:...} triggers remote code execution in Apache Log4j",
+    pattern: /\$\{jndi\s*:/i
+  },
+  {
+    id: "log-log4shell-obfuscated",
+    description: "Obfuscated Log4Shell: ${::-j}... lookup-bypass prefix used to evade WAF detection",
+    // ${::- is the Log4j lookup-bypass escape sequence; presence alone is suspicious
+    pattern: /\$\{::-/
+  },
+  {
+    id: "log-log4j-lookup",
+    description: "Log4j lookup syntax: ${env:...}, ${sys:...}, ${ctx:...} \u2014 data exfiltration",
+    pattern: /\$\{(?:env|sys|ctx|main|map|sd|web|docker|k8s|spring)\s*:/i
+  },
+  // ─── Server-Side Template Injection (SSTI) in log messages ───────────────
+  {
+    id: "log-ssti-double-brace",
+    description: "SSTI double-brace: {{expression}} \u2014 Jinja2, Twig, Handlebars, etc.",
+    pattern: /\{\{[\s\S]{0,80}\}\}/
+  },
+  {
+    id: "log-ssti-hash-brace",
+    description: "SSTI hash-brace: #{expression} \u2014 Thymeleaf, Velocity, Ruby ERB",
+    pattern: /#\{[\s\S]{0,80}\}/
+  },
+  {
+    id: "log-ssti-dollar-brace",
+    description: "SSTI/EL injection: ${expression with operators or method calls} \u2014 JSP EL, Freemarker, SpEL",
+    // Require that the ${...} content looks like an expression, not a plain variable name.
+    // Flags if the content contains: . ( * + operators, or known SSTI keywords.
+    // This avoids flagging ${PATH}, ${HOME} etc. (plain shell variables).
+    pattern: /\$\{[^}]*(?:\.|\(|\*|\+|\bclass\b|\bruntime\b|\bprocess\b|\bexec\b)[^}]{0,80}\}/i
+  },
+  {
+    id: "log-ssti-percent-tag",
+    description: "SSTI ERB/ASP tag: <%= expression %> \u2014 Ruby ERB, ASP",
+    pattern: /<%=[\s\S]{0,80}%>/
+  },
+  // ─── Null byte ────────────────────────────────────────────────────────────
+  {
+    id: "log-null-byte",
+    description: "Null byte: \\x00 or %00 \u2014 can truncate log entries in C-backed loggers",
+    pattern: /\x00|%00/
+  },
+  // ─── ANSI escape injection ────────────────────────────────────────────────
+  {
+    id: "log-ansi-escape",
+    description: "ANSI escape sequence: ESC[ \u2014 can manipulate terminal output when logs are tailed",
+    pattern: /\x1b\[/
+  }
+];
+var log_default = LOG_PATTERNS;
+
+// node_modules/is-unsafe/src/contexts/sql-strict.js
+var SQL_STRICT_EXTRA = [
+  {
+    id: "sql-line-comment",
+    description: "SQL line comment: -- followed by whitespace or end of string",
+    pattern: /--(?:\s|$)/
+  },
+  {
+    id: "sql-stacked-query",
+    description: "Stacked queries: semicolon immediately followed by a SQL keyword",
+    pattern: /;\s{0,10}(?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC)\b/i
+  },
+  {
+    id: "sql-hex-encoding",
+    description: "Hex-encoded string injection: 0x41414141 style (MySQL)",
+    pattern: /\b0x[0-9a-f]{4,}/i
+  }
+];
+var SQL_STRICT_PATTERNS = [...sql_default, ...SQL_STRICT_EXTRA];
+var sql_strict_default = SQL_STRICT_PATTERNS;
+
+// node_modules/is-unsafe/src/index.js
+html_default.label = "HTML";
+xml_default.label = "XML";
+svg_default.label = "SVG";
+sql_default.label = "SQL";
+sql_strict_default.label = "SQL-STRICT";
+shell_default.label = "SHELL";
+redos_default.label = "REDOS";
+nosql_default.label = "NOSQL";
+log_default.label = "LOG";
+var VALID_CONTEXTS = Object.freeze({
+  HTML: html_default,
+  XML: xml_default,
+  SVG: svg_default,
+  SQL: sql_default,
+  "SQL-STRICT": sql_strict_default,
+  SHELL: shell_default,
+  REDOS: redos_default,
+  NOSQL: nosql_default,
+  LOG: log_default
+});
+function assertString(value) {
+  if (typeof value !== "string") {
+    throw new TypeError(
+      `is-unsafe: first argument must be a string, got ${typeof value}`
+    );
+  }
+}
+__name(assertString, "assertString");
+function assertContext(context3) {
+  if (context3 instanceof RegExp) return;
+  if (Array.isArray(context3)) {
+    if (context3.length === 0) {
+      throw new TypeError("is-unsafe: context must not be an empty array");
+    }
+    if (Array.isArray(context3[0])) {
+      for (const list of context3) {
+        if (!Array.isArray(list) || list.length === 0) {
+          throw new TypeError(
+            "is-unsafe: each context in the array must be a non-empty pattern array (PatternList)"
+          );
+        }
+      }
+    }
+    return;
+  }
+  throw new TypeError(
+    `is-unsafe: second argument must be a PatternList (e.g. HTML), an array of PatternLists (e.g. [HTML, XML]), or a RegExp. Got: ${typeof context3}`
+  );
+}
+__name(assertContext, "assertContext");
+function normalise(context3) {
+  if (context3 instanceof RegExp) return { lists: null, regex: context3 };
+  if (Array.isArray(context3[0])) return { lists: context3, regex: null };
+  return { lists: [context3], regex: null };
+}
+__name(normalise, "normalise");
+function matchList(value, list) {
+  const label = list.label ?? "CUSTOM";
+  for (const rule of list) {
+    if (rule.pattern.test(value)) {
+      return { context: label, id: rule.id, description: rule.description, pattern: rule.pattern };
+    }
+  }
+  return null;
+}
+__name(matchList, "matchList");
+function isUnsafe(value, context3) {
+  assertString(value);
+  assertContext(context3);
+  const { lists, regex } = normalise(context3);
+  if (regex) return regex.test(value);
+  for (const list of lists) {
+    if (matchList(value, list) !== null) return true;
+  }
+  return false;
+}
+__name(isUnsafe, "isUnsafe");
 
 // node_modules/fast-xml-parser/src/xmlparser/OrderedObjParser.js
 function extractRawAttributes(prefixedAttrs, options) {
@@ -37971,36 +40635,10 @@ var OrderedObjParser = class {
   static {
     __name(this, "OrderedObjParser");
   }
-  constructor(options) {
+  constructor(options, externalEntities) {
     this.options = options;
     this.currentNode = null;
     this.tagsNodeStack = [];
-    this.docTypeEntities = {};
-    this.lastEntities = {
-      "apos": { regex: /&(apos|#39|#x27);/g, val: "'" },
-      "gt": { regex: /&(gt|#62|#x3E);/g, val: ">" },
-      "lt": { regex: /&(lt|#60|#x3C);/g, val: "<" },
-      "quot": { regex: /&(quot|#34|#x22);/g, val: '"' }
-    };
-    this.ampEntity = { regex: /&(amp|#38|#x26);/g, val: "&" };
-    this.htmlEntities = {
-      "space": { regex: /&(nbsp|#160);/g, val: " " },
-      // "lt" : { regex: /&(lt|#60);/g, val: "<" },
-      // "gt" : { regex: /&(gt|#62);/g, val: ">" },
-      // "amp" : { regex: /&(amp|#38);/g, val: "&" },
-      // "quot" : { regex: /&(quot|#34);/g, val: "\"" },
-      // "apos" : { regex: /&(apos|#39);/g, val: "'" },
-      "cent": { regex: /&(cent|#162);/g, val: "\xA2" },
-      "pound": { regex: /&(pound|#163);/g, val: "\xA3" },
-      "yen": { regex: /&(yen|#165);/g, val: "\xA5" },
-      "euro": { regex: /&(euro|#8364);/g, val: "\u20AC" },
-      "copyright": { regex: /&(copy|#169);/g, val: "\xA9" },
-      "reg": { regex: /&(reg|#174);/g, val: "\xAE" },
-      "inr": { regex: /&(inr|#8377);/g, val: "\u20B9" },
-      "num_dec": { regex: /&#([0-9]{1,7});/g, val: /* @__PURE__ */ __name((_, str) => fromCodePoint(str, 10, "&#"), "val") },
-      "num_hex": { regex: /&#x([0-9a-fA-F]{1,6});/g, val: /* @__PURE__ */ __name((_, str) => fromCodePoint(str, 16, "&#x"), "val") }
-    };
-    this.addExternalEntities = addExternalEntities;
     this.parseXml = parseXml;
     this.parseTextData = parseTextData;
     this.resolveNameSpace = resolveNameSpace;
@@ -38013,52 +40651,67 @@ var OrderedObjParser = class {
     this.ignoreAttributesFn = getIgnoreAttributesFn(this.options.ignoreAttributes);
     this.entityExpansionCount = 0;
     this.currentExpandedLength = 0;
+    this.doctypefound = false;
+    let namedEntities = { ...XML };
+    if (this.options.entityDecoder) {
+      this.entityDecoder = this.options.entityDecoder;
+    } else {
+      if (typeof this.options.htmlEntities === "object") namedEntities = this.options.htmlEntities;
+      else if (this.options.htmlEntities === true) namedEntities = { ...COMMON_HTML, ...CURRENCY };
+      this.entityDecoder = new EntityDecoder({
+        namedEntities: { ...namedEntities, ...externalEntities },
+        numericAllowed: this.options.htmlEntities,
+        limit: {
+          maxTotalExpansions: this.options.processEntities.maxTotalExpansions,
+          maxExpandedLength: this.options.processEntities.maxExpandedLength,
+          applyLimitsTo: this.options.processEntities.appliesTo
+        },
+        // onExternalEntity: (name, value) => isUnsafe(value) ? 'block' : 'allow',
+        onInputEntity: /* @__PURE__ */ __name((name, value) => (
+          //TODO: VALID_CONTEXTS.HTML should be set only if this.options.htmlEntities
+          isUnsafe(value, [html_default, xml_default]) ? ENTITY_ACTION.BLOCK : ENTITY_ACTION.ALLOW
+        ), "onInputEntity")
+        //postCheck: resolved => resolved
+      });
+    }
     this.matcher = new Matcher();
+    this.readonlyMatcher = this.matcher.readOnly();
     this.isCurrentNodeStopNode = false;
-    if (this.options.stopNodes && this.options.stopNodes.length > 0) {
-      this.stopNodeExpressions = [];
-      for (let i = 0; i < this.options.stopNodes.length; i++) {
-        const stopNodeExp = this.options.stopNodes[i];
+    this.stopNodeExpressionsSet = new ExpressionSet();
+    const stopNodesOpts = this.options.stopNodes;
+    if (stopNodesOpts && stopNodesOpts.length > 0) {
+      for (let i = 0; i < stopNodesOpts.length; i++) {
+        const stopNodeExp = stopNodesOpts[i];
         if (typeof stopNodeExp === "string") {
-          this.stopNodeExpressions.push(new Expression(stopNodeExp));
+          this.stopNodeExpressionsSet.add(new Expression(stopNodeExp));
         } else if (stopNodeExp instanceof Expression) {
-          this.stopNodeExpressions.push(stopNodeExp);
+          this.stopNodeExpressionsSet.add(stopNodeExp);
         }
       }
+      this.stopNodeExpressionsSet.seal();
     }
   }
 };
-function addExternalEntities(externalEntities) {
-  const entKeys = Object.keys(externalEntities);
-  for (let i = 0; i < entKeys.length; i++) {
-    const ent = entKeys[i];
-    const escaped = ent.replace(/[.\-+*:]/g, "\\.");
-    this.lastEntities[ent] = {
-      regex: new RegExp("&" + escaped + ";", "g"),
-      val: externalEntities[ent]
-    };
-  }
-}
-__name(addExternalEntities, "addExternalEntities");
 function parseTextData(val, tagName, jPath, dontTrim, hasAttributes, isLeafNode, escapeEntities) {
+  const options = this.options;
   if (val !== void 0) {
-    if (this.options.trimValues && !dontTrim) {
+    if (options.trimValues && !dontTrim) {
       val = val.trim();
     }
     if (val.length > 0) {
       if (!escapeEntities) val = this.replaceEntitiesValue(val, tagName, jPath);
-      const jPathOrMatcher = this.options.jPath ? jPath.toString() : jPath;
-      const newval = this.options.tagValueProcessor(tagName, val, jPathOrMatcher, hasAttributes, isLeafNode);
+      const jPathOrMatcher = options.jPath ? jPath.toString() : jPath;
+      const newval = options.tagValueProcessor(tagName, val, jPathOrMatcher, hasAttributes, isLeafNode);
       if (newval === null || newval === void 0) {
         return val;
       } else if (typeof newval !== typeof val || newval !== val) {
         return newval;
-      } else if (this.options.trimValues) {
-        return parseValue(val, this.options.parseTagValue, this.options.numberParseOptions);
+      } else if (options.trimValues) {
+        return parseValue(val, options.parseTagValue, options.numberParseOptions);
       } else {
         const trimmedVal = val.trim();
         if (trimmedVal === val) {
-          return parseValue(val, this.options.parseTagValue, this.options.numberParseOptions);
+          return parseValue(val, options.parseTagValue, options.numberParseOptions);
         } else {
           return val;
         }
@@ -38082,69 +40735,62 @@ function resolveNameSpace(tagname) {
 }
 __name(resolveNameSpace, "resolveNameSpace");
 var attrsRegx = new RegExp(`([^\\s=]+)\\s*(=\\s*(['"])([\\s\\S]*?)\\3)?`, "gm");
-function buildAttributesMap(attrStr, jPath, tagName) {
-  if (this.options.ignoreAttributes !== true && typeof attrStr === "string") {
+function buildAttributesMap(attrStr, jPath, tagName, force = false) {
+  const options = this.options;
+  if (force === true || options.ignoreAttributes !== true && typeof attrStr === "string") {
     const matches = getAllMatches(attrStr, attrsRegx);
     const len = matches.length;
     const attrs = {};
+    const processedVals = new Array(len);
+    let hasRawAttrs = false;
     const rawAttrsForMatcher = {};
     for (let i = 0; i < len; i++) {
       const attrName = this.resolveNameSpace(matches[i][1]);
       const oldVal = matches[i][4];
       if (attrName.length && oldVal !== void 0) {
-        let parsedVal = oldVal;
-        if (this.options.trimValues) {
-          parsedVal = parsedVal.trim();
-        }
-        parsedVal = this.replaceEntitiesValue(parsedVal, tagName, jPath);
-        rawAttrsForMatcher[attrName] = parsedVal;
+        let val = oldVal;
+        if (options.trimValues) val = val.trim();
+        val = this.replaceEntitiesValue(val, tagName, this.readonlyMatcher);
+        processedVals[i] = val;
+        rawAttrsForMatcher[attrName] = val;
+        hasRawAttrs = true;
       }
     }
-    if (Object.keys(rawAttrsForMatcher).length > 0 && typeof jPath === "object" && jPath.updateCurrent) {
+    if (hasRawAttrs && typeof jPath === "object" && jPath.updateCurrent) {
       jPath.updateCurrent(rawAttrsForMatcher);
     }
+    const jPathStr = options.jPath ? jPath.toString() : this.readonlyMatcher;
+    let hasAttrs = false;
     for (let i = 0; i < len; i++) {
       const attrName = this.resolveNameSpace(matches[i][1]);
-      const jPathStr = this.options.jPath ? jPath.toString() : jPath;
-      if (this.ignoreAttributesFn(attrName, jPathStr)) {
-        continue;
-      }
-      let oldVal = matches[i][4];
-      let aName = this.options.attributeNamePrefix + attrName;
+      if (this.ignoreAttributesFn(attrName, jPathStr)) continue;
+      let aName = options.attributeNamePrefix + attrName;
       if (attrName.length) {
-        if (this.options.transformAttributeName) {
-          aName = this.options.transformAttributeName(aName);
+        if (options.transformAttributeName) {
+          aName = options.transformAttributeName(aName);
         }
-        aName = sanitizeName(aName, this.options);
-        if (oldVal !== void 0) {
-          if (this.options.trimValues) {
-            oldVal = oldVal.trim();
-          }
-          oldVal = this.replaceEntitiesValue(oldVal, tagName, jPath);
-          const jPathOrMatcher = this.options.jPath ? jPath.toString() : jPath;
-          const newVal = this.options.attributeValueProcessor(attrName, oldVal, jPathOrMatcher);
+        aName = sanitizeName(aName, options);
+        if (matches[i][4] !== void 0) {
+          const oldVal = processedVals[i];
+          const newVal = options.attributeValueProcessor(attrName, oldVal, jPathStr);
           if (newVal === null || newVal === void 0) {
             attrs[aName] = oldVal;
           } else if (typeof newVal !== typeof oldVal || newVal !== oldVal) {
             attrs[aName] = newVal;
           } else {
-            attrs[aName] = parseValue(
-              oldVal,
-              this.options.parseAttributeValue,
-              this.options.numberParseOptions
-            );
+            attrs[aName] = parseValue(oldVal, options.parseAttributeValue, options.numberParseOptions);
           }
-        } else if (this.options.allowBooleanAttributes) {
+          hasAttrs = true;
+        } else if (options.allowBooleanAttributes) {
           attrs[aName] = true;
+          hasAttrs = true;
         }
       }
     }
-    if (!Object.keys(attrs).length) {
-      return;
-    }
-    if (this.options.attributesGroupName) {
+    if (!hasAttrs) return;
+    if (options.attributesGroupName && !options.preserveOrder) {
       const attrCollection = {};
-      attrCollection[this.options.attributesGroupName] = attrs;
+      attrCollection[options.attributesGroupName] = attrs;
       return attrCollection;
     }
     return attrs;
@@ -38157,80 +40803,99 @@ var parseXml = /* @__PURE__ */ __name(function(xmlData) {
   let currentNode = xmlObj;
   let textData = "";
   this.matcher.reset();
+  this.entityDecoder.reset();
   this.entityExpansionCount = 0;
   this.currentExpandedLength = 0;
-  const docTypeReader = new DocTypeReader(this.options.processEntities);
-  for (let i = 0; i < xmlData.length; i++) {
+  this.doctypefound = false;
+  const options = this.options;
+  const docTypeReader = new DocTypeReader(options.processEntities);
+  const xmlLen = xmlData.length;
+  for (let i = 0; i < xmlLen; i++) {
     const ch = xmlData[i];
     if (ch === "<") {
-      if (xmlData[i + 1] === "/") {
+      const c1 = xmlData.charCodeAt(i + 1);
+      if (c1 === 47) {
         const closeIndex = findClosingIndex(xmlData, ">", i, "Closing Tag is not closed.");
         let tagName = xmlData.substring(i + 2, closeIndex).trim();
-        if (this.options.removeNSPrefix) {
+        if (options.removeNSPrefix) {
           const colonIndex = tagName.indexOf(":");
           if (colonIndex !== -1) {
             tagName = tagName.substr(colonIndex + 1);
           }
         }
-        tagName = transformTagName(this.options.transformTagName, tagName, "", this.options).tagName;
+        tagName = transformTagName(options.transformTagName, tagName, "", options).tagName;
         if (currentNode) {
-          textData = this.saveTextToParentTag(textData, currentNode, this.matcher);
+          textData = this.saveTextToParentTag(textData, currentNode, this.readonlyMatcher);
         }
         const lastTagName = this.matcher.getCurrentTag();
-        if (tagName && this.options.unpairedTags.indexOf(tagName) !== -1) {
+        if (tagName && options.unpairedTagsSet.has(tagName)) {
           throw new Error(`Unpaired tag can not be used as closing tag: </${tagName}>`);
         }
-        if (lastTagName && this.options.unpairedTags.indexOf(lastTagName) !== -1) {
+        if (lastTagName && options.unpairedTagsSet.has(lastTagName)) {
           this.matcher.pop();
           this.tagsNodeStack.pop();
         }
         this.matcher.pop();
         this.isCurrentNodeStopNode = false;
-        currentNode = this.tagsNodeStack.pop();
+        currentNode = this.tagsNodeStack.pop() || xmlObj;
+        if (options.captureMetaData && currentNode) {
+          currentNode.addEndIndex(closeIndex + 1);
+        }
         textData = "";
         i = closeIndex;
-      } else if (xmlData[i + 1] === "?") {
+      } else if (c1 === 63) {
         let tagData = readTagExp(xmlData, i, false, "?>");
         if (!tagData) throw new Error("Pi Tag is not closed.");
-        textData = this.saveTextToParentTag(textData, currentNode, this.matcher);
-        if (this.options.ignoreDeclaration && tagData.tagName === "?xml" || this.options.ignorePiTags) {
+        textData = this.saveTextToParentTag(textData, currentNode, this.readonlyMatcher);
+        const attsMap = this.buildAttributesMap(tagData.tagExp, this.matcher, tagData.tagName, true);
+        if (attsMap) {
+          const ver = attsMap[this.options.attributeNamePrefix + "version"];
+          this.entityDecoder.setXmlVersion(Number(ver) || 1);
+          docTypeReader.setXmlVersion(Number(ver) || 1);
+        }
+        if (options.ignoreDeclaration && tagData.tagName === "?xml" || options.ignorePiTags) {
         } else {
           const childNode = new XmlNode(tagData.tagName);
-          childNode.add(this.options.textNodeName, "");
-          if (tagData.tagName !== tagData.tagExp && tagData.attrExpPresent) {
-            childNode[":@"] = this.buildAttributesMap(tagData.tagExp, this.matcher, tagData.tagName);
+          childNode.add(options.textNodeName, "");
+          if (tagData.tagName !== tagData.tagExp && tagData.attrExpPresent && options.ignoreAttributes !== true) {
+            childNode[":@"] = attsMap;
           }
-          this.addChild(currentNode, childNode, this.matcher, i);
+          this.addChild(currentNode, childNode, this.readonlyMatcher, i);
+          if (options.captureMetaData) {
+            currentNode.addEndIndex(tagData.closeIndex + 2);
+          }
         }
         i = tagData.closeIndex + 1;
-      } else if (xmlData.substr(i + 1, 3) === "!--") {
+      } else if (c1 === 33 && xmlData.charCodeAt(i + 2) === 45 && xmlData.charCodeAt(i + 3) === 45) {
         const endIndex = findClosingIndex(xmlData, "-->", i + 4, "Comment is not closed.");
-        if (this.options.commentPropName) {
+        if (options.commentPropName) {
           const comment = xmlData.substring(i + 4, endIndex - 2);
-          textData = this.saveTextToParentTag(textData, currentNode, this.matcher);
-          currentNode.add(this.options.commentPropName, [{ [this.options.textNodeName]: comment }]);
+          textData = this.saveTextToParentTag(textData, currentNode, this.readonlyMatcher);
+          currentNode.add(options.commentPropName, [{ [options.textNodeName]: comment }]);
         }
         i = endIndex;
-      } else if (xmlData.substr(i + 1, 2) === "!D") {
+      } else if (c1 === 33 && xmlData.charCodeAt(i + 2) === 68) {
+        if (this.doctypefound) throw new Error("Multiple DOCTYPE declarations found.");
+        this.doctypefound = true;
         const result = docTypeReader.readDocType(xmlData, i);
-        this.docTypeEntities = result.entities;
+        this.entityDecoder.addInputEntities(result.entities);
         i = result.i;
-      } else if (xmlData.substr(i + 1, 2) === "![") {
+      } else if (c1 === 33 && xmlData.charCodeAt(i + 2) === 91) {
         const closeIndex = findClosingIndex(xmlData, "]]>", i, "CDATA is not closed.") - 2;
         const tagExp = xmlData.substring(i + 9, closeIndex);
-        textData = this.saveTextToParentTag(textData, currentNode, this.matcher);
-        let val = this.parseTextData(tagExp, currentNode.tagname, this.matcher, true, false, true, true);
+        textData = this.saveTextToParentTag(textData, currentNode, this.readonlyMatcher);
+        let val = this.parseTextData(tagExp, currentNode.tagname, this.readonlyMatcher, true, false, true, true);
         if (val == void 0) val = "";
-        if (this.options.cdataPropName) {
-          currentNode.add(this.options.cdataPropName, [{ [this.options.textNodeName]: tagExp }]);
+        if (options.cdataPropName) {
+          currentNode.add(options.cdataPropName, [{ [options.textNodeName]: tagExp }]);
         } else {
-          currentNode.add(this.options.textNodeName, val);
+          currentNode.add(options.textNodeName, val);
         }
         i = closeIndex + 2;
       } else {
-        let result = readTagExp(xmlData, i, this.options.removeNSPrefix);
+        let result = readTagExp(xmlData, i, options.removeNSPrefix);
         if (!result) {
-          const context3 = xmlData.substring(Math.max(0, i - 50), Math.min(xmlData.length, i + 50));
+          const context3 = xmlData.substring(Math.max(0, i - 50), Math.min(xmlLen, i + 50));
           throw new Error(`readTagExp returned undefined at position ${i}. Context: "${context3}"`);
         }
         let tagName = result.tagName;
@@ -38238,17 +40903,17 @@ var parseXml = /* @__PURE__ */ __name(function(xmlData) {
         let tagExp = result.tagExp;
         let attrExpPresent = result.attrExpPresent;
         let closeIndex = result.closeIndex;
-        ({ tagName, tagExp } = transformTagName(this.options.transformTagName, tagName, tagExp, this.options));
-        if (this.options.strictReservedNames && (tagName === this.options.commentPropName || tagName === this.options.cdataPropName)) {
+        ({ tagName, tagExp } = transformTagName(options.transformTagName, tagName, tagExp, options));
+        if (options.strictReservedNames && (tagName === options.commentPropName || tagName === options.cdataPropName || tagName === options.textNodeName || tagName === options.attributesGroupName)) {
           throw new Error(`Invalid tag name: ${tagName}`);
         }
         if (currentNode && textData) {
           if (currentNode.tagname !== "!xml") {
-            textData = this.saveTextToParentTag(textData, currentNode, this.matcher, false);
+            textData = this.saveTextToParentTag(textData, currentNode, this.readonlyMatcher, false);
           }
         }
         const lastTag = currentNode;
-        if (lastTag && this.options.unpairedTags.indexOf(lastTag.tagname) !== -1) {
+        if (lastTag && options.unpairedTagsSet.has(lastTag.tagname)) {
           currentNode = this.tagsNodeStack.pop();
           this.matcher.pop();
         }
@@ -38273,18 +40938,18 @@ var parseXml = /* @__PURE__ */ __name(function(xmlData) {
         if (tagName !== tagExp && attrExpPresent) {
           prefixedAttrs = this.buildAttributesMap(tagExp, this.matcher, tagName);
           if (prefixedAttrs) {
-            rawAttrs = extractRawAttributes(prefixedAttrs, this.options);
+            rawAttrs = extractRawAttributes(prefixedAttrs, options);
           }
         }
         if (tagName !== xmlObj.tagname) {
-          this.isCurrentNodeStopNode = this.isItStopNode(this.stopNodeExpressions, this.matcher);
+          this.isCurrentNodeStopNode = this.isItStopNode();
         }
         const startIndex = i;
         if (this.isCurrentNodeStopNode) {
           let tagContent = "";
           if (isSelfClosing) {
             i = result.closeIndex;
-          } else if (this.options.unpairedTags.indexOf(tagName) !== -1) {
+          } else if (options.unpairedTagsSet.has(tagName)) {
             i = result.closeIndex;
           } else {
             const result2 = this.readStopNodeData(xmlData, rawTagName, closeIndex + 1);
@@ -38296,40 +40961,49 @@ var parseXml = /* @__PURE__ */ __name(function(xmlData) {
           if (prefixedAttrs) {
             childNode[":@"] = prefixedAttrs;
           }
-          childNode.add(this.options.textNodeName, tagContent);
+          childNode.add(options.textNodeName, tagContent);
           this.matcher.pop();
           this.isCurrentNodeStopNode = false;
-          this.addChild(currentNode, childNode, this.matcher, startIndex);
+          this.addChild(currentNode, childNode, this.readonlyMatcher, startIndex);
+          if (options.captureMetaData) {
+            currentNode.addEndIndex(i + 1);
+          }
         } else {
           if (isSelfClosing) {
-            ({ tagName, tagExp } = transformTagName(this.options.transformTagName, tagName, tagExp, this.options));
+            ({ tagName, tagExp } = transformTagName(options.transformTagName, tagName, tagExp, options));
             const childNode = new XmlNode(tagName);
             if (prefixedAttrs) {
               childNode[":@"] = prefixedAttrs;
             }
-            this.addChild(currentNode, childNode, this.matcher, startIndex);
+            this.addChild(currentNode, childNode, this.readonlyMatcher, startIndex);
+            if (options.captureMetaData) {
+              currentNode.addEndIndex(closeIndex + 1);
+            }
             this.matcher.pop();
             this.isCurrentNodeStopNode = false;
-          } else if (this.options.unpairedTags.indexOf(tagName) !== -1) {
+          } else if (options.unpairedTagsSet.has(tagName)) {
             const childNode = new XmlNode(tagName);
             if (prefixedAttrs) {
               childNode[":@"] = prefixedAttrs;
             }
-            this.addChild(currentNode, childNode, this.matcher, startIndex);
+            this.addChild(currentNode, childNode, this.readonlyMatcher, startIndex);
+            if (options.captureMetaData) {
+              currentNode.addEndIndex(result.closeIndex + 1);
+            }
             this.matcher.pop();
             this.isCurrentNodeStopNode = false;
             i = result.closeIndex;
             continue;
           } else {
             const childNode = new XmlNode(tagName);
-            if (this.tagsNodeStack.length > this.options.maxNestedTags) {
+            if (this.tagsNodeStack.length > options.maxNestedTags) {
               throw new Error("Maximum nested tags exceeded");
             }
             this.tagsNodeStack.push(currentNode);
             if (prefixedAttrs) {
               childNode[":@"] = prefixedAttrs;
             }
-            this.addChild(currentNode, childNode, this.matcher, startIndex);
+            this.addChild(currentNode, childNode, this.readonlyMatcher, startIndex);
             currentNode = childNode;
           }
           textData = "";
@@ -38373,59 +41047,7 @@ function replaceEntitiesValue(val, tagName, jPath) {
       return val;
     }
   }
-  for (const entityName of Object.keys(this.docTypeEntities)) {
-    const entity = this.docTypeEntities[entityName];
-    const matches = val.match(entity.regx);
-    if (matches) {
-      this.entityExpansionCount += matches.length;
-      if (entityConfig.maxTotalExpansions && this.entityExpansionCount > entityConfig.maxTotalExpansions) {
-        throw new Error(
-          `Entity expansion limit exceeded: ${this.entityExpansionCount} > ${entityConfig.maxTotalExpansions}`
-        );
-      }
-      const lengthBefore = val.length;
-      val = val.replace(entity.regx, entity.val);
-      if (entityConfig.maxExpandedLength) {
-        this.currentExpandedLength += val.length - lengthBefore;
-        if (this.currentExpandedLength > entityConfig.maxExpandedLength) {
-          throw new Error(
-            `Total expanded content size exceeded: ${this.currentExpandedLength} > ${entityConfig.maxExpandedLength}`
-          );
-        }
-      }
-    }
-  }
-  for (const entityName of Object.keys(this.lastEntities)) {
-    const entity = this.lastEntities[entityName];
-    const matches = val.match(entity.regex);
-    if (matches) {
-      this.entityExpansionCount += matches.length;
-      if (entityConfig.maxTotalExpansions && this.entityExpansionCount > entityConfig.maxTotalExpansions) {
-        throw new Error(
-          `Entity expansion limit exceeded: ${this.entityExpansionCount} > ${entityConfig.maxTotalExpansions}`
-        );
-      }
-    }
-    val = val.replace(entity.regex, entity.val);
-  }
-  if (val.indexOf("&") === -1) return val;
-  if (this.options.htmlEntities) {
-    for (const entityName of Object.keys(this.htmlEntities)) {
-      const entity = this.htmlEntities[entityName];
-      const matches = val.match(entity.regex);
-      if (matches) {
-        this.entityExpansionCount += matches.length;
-        if (entityConfig.maxTotalExpansions && this.entityExpansionCount > entityConfig.maxTotalExpansions) {
-          throw new Error(
-            `Entity expansion limit exceeded: ${this.entityExpansionCount} > ${entityConfig.maxTotalExpansions}`
-          );
-        }
-      }
-      val = val.replace(entity.regex, entity.val);
-    }
-  }
-  val = val.replace(this.ampEntity.regex, this.ampEntity.val);
-  return val;
+  return this.entityDecoder.decode(val);
 }
 __name(replaceEntitiesValue, "replaceEntitiesValue");
 function saveTextToParentTag(textData, parentNode, matcher, isLeafNode) {
@@ -38446,43 +41068,38 @@ function saveTextToParentTag(textData, parentNode, matcher, isLeafNode) {
   return textData;
 }
 __name(saveTextToParentTag, "saveTextToParentTag");
-function isItStopNode(stopNodeExpressions, matcher) {
-  if (!stopNodeExpressions || stopNodeExpressions.length === 0) return false;
-  for (let i = 0; i < stopNodeExpressions.length; i++) {
-    if (matcher.matches(stopNodeExpressions[i])) {
-      return true;
-    }
-  }
-  return false;
+function isItStopNode() {
+  if (this.stopNodeExpressionsSet.size === 0) return false;
+  return this.matcher.matchesAny(this.stopNodeExpressionsSet);
 }
 __name(isItStopNode, "isItStopNode");
 function tagExpWithClosingIndex(xmlData, i, closingChar = ">") {
-  let attrBoundary;
-  let tagExp = "";
-  for (let index = i; index < xmlData.length; index++) {
-    let ch = xmlData[index];
+  let attrBoundary = 0;
+  const len = xmlData.length;
+  const closeCode0 = closingChar.charCodeAt(0);
+  const closeCode1 = closingChar.length > 1 ? closingChar.charCodeAt(1) : -1;
+  let result = "";
+  let segmentStart = i;
+  for (let index = i; index < len; index++) {
+    const code = xmlData.charCodeAt(index);
     if (attrBoundary) {
-      if (ch === attrBoundary) attrBoundary = "";
-    } else if (ch === '"' || ch === "'") {
-      attrBoundary = ch;
-    } else if (ch === closingChar[0]) {
-      if (closingChar[1]) {
-        if (xmlData[index + 1] === closingChar[1]) {
-          return {
-            data: tagExp,
-            index
-          };
+      if (code === attrBoundary) attrBoundary = 0;
+    } else if (code === 34 || code === 39) {
+      attrBoundary = code;
+    } else if (code === closeCode0) {
+      if (closeCode1 !== -1) {
+        if (xmlData.charCodeAt(index + 1) === closeCode1) {
+          result += xmlData.substring(segmentStart, index);
+          return { data: result, index };
         }
       } else {
-        return {
-          data: tagExp,
-          index
-        };
+        result += xmlData.substring(segmentStart, index);
+        return { data: result, index };
       }
-    } else if (ch === "	") {
-      ch = " ";
+    } else if (code === 9 && !attrBoundary) {
+      result += xmlData.substring(segmentStart, index) + " ";
+      segmentStart = index + 1;
     }
-    tagExp += ch;
   }
 }
 __name(tagExpWithClosingIndex, "tagExpWithClosingIndex");
@@ -38495,6 +41112,12 @@ function findClosingIndex(xmlData, str, i, errMsg) {
   }
 }
 __name(findClosingIndex, "findClosingIndex");
+function findClosingChar(xmlData, char, i, errMsg) {
+  const closingIndex = xmlData.indexOf(char, i);
+  if (closingIndex === -1) throw new Error(errMsg);
+  return closingIndex;
+}
+__name(findClosingChar, "findClosingChar");
 function readTagExp(xmlData, i, removeNSPrefix, closingChar = ">") {
   const result = tagExpWithClosingIndex(xmlData, i + 1, closingChar);
   if (!result) return;
@@ -38527,10 +41150,12 @@ __name(readTagExp, "readTagExp");
 function readStopNodeData(xmlData, tagName, i) {
   const startIndex = i;
   let openTagCount = 1;
-  for (; i < xmlData.length; i++) {
+  const xmllen = xmlData.length;
+  for (; i < xmllen; i++) {
     if (xmlData[i] === "<") {
-      if (xmlData[i + 1] === "/") {
-        const closeIndex = findClosingIndex(xmlData, ">", i, `${tagName} is not closed`);
+      const c1 = xmlData.charCodeAt(i + 1);
+      if (c1 === 47) {
+        const closeIndex = findClosingChar(xmlData, ">", i, `${tagName} is not closed`);
         let closeTagName = xmlData.substring(i + 2, closeIndex).trim();
         if (closeTagName === tagName) {
           openTagCount--;
@@ -38542,17 +41167,17 @@ function readStopNodeData(xmlData, tagName, i) {
           }
         }
         i = closeIndex;
-      } else if (xmlData[i + 1] === "?") {
+      } else if (c1 === 63) {
         const closeIndex = findClosingIndex(xmlData, "?>", i + 1, "StopNode is not closed.");
         i = closeIndex;
-      } else if (xmlData.substr(i + 1, 3) === "!--") {
+      } else if (c1 === 33 && xmlData.charCodeAt(i + 2) === 45 && xmlData.charCodeAt(i + 3) === 45) {
         const closeIndex = findClosingIndex(xmlData, "-->", i + 3, "StopNode is not closed.");
         i = closeIndex;
-      } else if (xmlData.substr(i + 1, 2) === "![") {
+      } else if (c1 === 33 && xmlData.charCodeAt(i + 2) === 91) {
         const closeIndex = findClosingIndex(xmlData, "]]>", i, "StopNode is not closed.") - 2;
         i = closeIndex;
       } else {
-        const tagData = readTagExp(xmlData, i, ">");
+        const tagData = readTagExp(xmlData, i, false);
         if (tagData) {
           const openTagName = tagData && tagData.tagName;
           if (openTagName === tagName && tagData.tagExp[tagData.tagExp.length - 1] !== "/") {
@@ -38580,15 +41205,6 @@ function parseValue(val, shouldParse, options) {
   }
 }
 __name(parseValue, "parseValue");
-function fromCodePoint(str, base, prefix2) {
-  const codePoint = Number.parseInt(str, base);
-  if (codePoint >= 0 && codePoint <= 1114111) {
-    return String.fromCodePoint(codePoint);
-  } else {
-    return prefix2 + str + ";";
-  }
-}
-__name(fromCodePoint, "fromCodePoint");
 function transformTagName(fn, tagName, tagExp, options) {
   if (fn) {
     const newTagName = fn(tagName);
@@ -38628,11 +41244,11 @@ function stripAttributePrefix(attrs, prefix2) {
   return rawAttrs;
 }
 __name(stripAttributePrefix, "stripAttributePrefix");
-function prettify(node, options, matcher) {
-  return compress(node, options, matcher);
+function prettify(node, options, matcher, readonlyMatcher) {
+  return compress(node, options, matcher, readonlyMatcher);
 }
 __name(prettify, "prettify");
-function compress(arr, options, matcher) {
+function compress(arr, options, matcher, readonlyMatcher) {
   let text;
   const compressedObj = {};
   for (let i = 0; i < arr.length; i++) {
@@ -38651,10 +41267,13 @@ function compress(arr, options, matcher) {
     } else if (property === void 0) {
       continue;
     } else if (tagObj[property]) {
-      let val = compress(tagObj[property], options, matcher);
+      let val = compress(tagObj[property], options, matcher, readonlyMatcher);
       const isLeaf = isLeafTag(val, options);
+      if (Object.keys(val).length === 0 && options.alwaysCreateTextNode) {
+        val[options.textNodeName] = "";
+      }
       if (tagObj[":@"]) {
-        assignAttributes(val, tagObj[":@"], matcher, options);
+        assignAttributes(val, tagObj[":@"], readonlyMatcher, options);
       } else if (Object.keys(val).length === 1 && val[options.textNodeName] !== void 0 && !options.alwaysCreateTextNode) {
         val = val[options.textNodeName];
       } else if (Object.keys(val).length === 0) {
@@ -38670,7 +41289,7 @@ function compress(arr, options, matcher) {
         }
         compressedObj[property].push(val);
       } else {
-        const jPathOrMatcher = options.jPath ? matcher.toString() : matcher;
+        const jPathOrMatcher = options.jPath ? readonlyMatcher.toString() : readonlyMatcher;
         if (options.isArray(property, jPathOrMatcher, isLeaf)) {
           compressedObj[property] = [val];
         } else {
@@ -38696,14 +41315,14 @@ function propName(obj) {
   }
 }
 __name(propName, "propName");
-function assignAttributes(obj, attrMap, matcher, options) {
+function assignAttributes(obj, attrMap, readonlyMatcher, options) {
   if (attrMap) {
     const keys = Object.keys(attrMap);
     const len = keys.length;
     for (let i = 0; i < len; i++) {
       const atrrName = keys[i];
       const rawAttrName = atrrName.startsWith(options.attributeNamePrefix) ? atrrName.substring(options.attributeNamePrefix.length) : atrrName;
-      const jPathOrMatcher = options.jPath ? matcher.toString() + "." + rawAttrName : matcher;
+      const jPathOrMatcher = options.jPath ? readonlyMatcher.toString() + "." + rawAttrName : readonlyMatcher;
       if (options.isArray(atrrName, jPathOrMatcher, true, true)) {
         obj[atrrName] = [attrMap[atrrName]];
       } else {
@@ -38742,7 +41361,11 @@ var XMLParser = class {
    */
   parse(xmlData, validationOption) {
     if (typeof xmlData !== "string" && xmlData.toString) {
-      xmlData = xmlData.toString();
+      if (xmlData instanceof Uint8Array && !(typeof Buffer !== "undefined" && Buffer.isBuffer(xmlData))) {
+        xmlData = new TextDecoder("utf-8", { ignoreBOM: true }).decode(xmlData);
+      } else {
+        xmlData = xmlData.toString();
+      }
     } else if (typeof xmlData !== "string") {
       throw new Error("XML data is accepted in String or Bytes[] form.");
     }
@@ -38753,11 +41376,10 @@ var XMLParser = class {
         throw Error(`${result.err.msg}:${result.err.line}:${result.err.col}`);
       }
     }
-    const orderedObjParser = new OrderedObjParser(this.options);
-    orderedObjParser.addExternalEntities(this.externalEntities);
+    const orderedObjParser = new OrderedObjParser(this.options, this.externalEntities);
     const orderedResult = orderedObjParser.parseXml(xmlData);
     if (this.options.preserveOrder || orderedResult === void 0) return orderedResult;
-    else return prettify(orderedResult, this.options, orderedObjParser.matcher);
+    else return prettify(orderedResult, this.options, orderedObjParser.matcher, orderedObjParser.readonlyMatcher);
   }
   /**
    * Add Entity which is not by default supported by this library
@@ -38790,11 +41412,49 @@ var XMLParser = class {
   }
 };
 
+// node_modules/fast-xml-builder/src/util.js
+function valToStr(val) {
+  return typeof val === "number" && Object.is(val, -0) ? "-0" : String(val);
+}
+__name(valToStr, "valToStr");
+function safeComment(val) {
+  return valToStr(val).replace(/--/g, "- -").replace(/--/g, "- -").replace(/-$/, "- ");
+}
+__name(safeComment, "safeComment");
+function safeCdata(val) {
+  return valToStr(val).replace(/\]\]>/g, "]]]]><![CDATA[>");
+}
+__name(safeCdata, "safeCdata");
+function escapeAttribute(val) {
+  return valToStr(val).replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+__name(escapeAttribute, "escapeAttribute");
+
 // node_modules/fast-xml-builder/src/orderedJs2Xml.js
 var EOL7 = "\n";
+function detectXmlVersionFromArray(jArray, options) {
+  if (!Array.isArray(jArray) || jArray.length === 0) return "1.0";
+  const first = jArray[0];
+  const firstKey = propName2(first);
+  if (firstKey === "?xml") {
+    const attrs = first[":@"];
+    if (attrs) {
+      const versionKey = options.attributeNamePrefix + "version";
+      if (attrs[versionKey]) return attrs[versionKey];
+    }
+  }
+  return "1.0";
+}
+__name(detectXmlVersionFromArray, "detectXmlVersionFromArray");
+function resolveTagName(name, isAttribute2, options, matcher, qNameValidator) {
+  if (!options.sanitizeName) return name;
+  if (qNameValidator(name)) return name;
+  return options.sanitizeName(name, { isAttribute: isAttribute2, matcher: matcher.readOnly() });
+}
+__name(resolveTagName, "resolveTagName");
 function toXml(jArray, options) {
   let indentation = "";
-  if (options.format && options.indentBy.length > 0) {
+  if (options.format) {
     indentation = EOL7;
   }
   const stopNodeExpressions = [];
@@ -38808,11 +41468,13 @@ function toXml(jArray, options) {
       }
     }
   }
+  const xmlVersion = detectXmlVersionFromArray(jArray, options);
+  const qNameValidator = createValidator("qName", { xmlVersion });
   const matcher = new Matcher();
-  return arrToStr(jArray, options, indentation, matcher, stopNodeExpressions);
+  return arrToStr(jArray, options, indentation, matcher, stopNodeExpressions, qNameValidator);
 }
 __name(toXml, "toXml");
-function arrToStr(arr, options, indentation, matcher, stopNodeExpressions) {
+function arrToStr(arr, options, indentation, matcher, stopNodeExpressions, qNameValidator) {
   let xmlStr = "";
   let isPreviousElementTag = false;
   if (options.maxNestedTags && matcher.getDepth() > options.maxNestedTags) {
@@ -38820,7 +41482,7 @@ function arrToStr(arr, options, indentation, matcher, stopNodeExpressions) {
   }
   if (!Array.isArray(arr)) {
     if (arr !== void 0 && arr !== null) {
-      let text = arr.toString();
+      let text = valToStr(arr);
       text = replaceEntitiesValue2(text, options);
       return text;
     }
@@ -38828,17 +41490,20 @@ function arrToStr(arr, options, indentation, matcher, stopNodeExpressions) {
   }
   for (let i = 0; i < arr.length; i++) {
     const tagObj = arr[i];
-    const tagName = propName2(tagObj);
-    if (tagName === void 0) continue;
+    const rawTagName = propName2(tagObj);
+    if (rawTagName === void 0) continue;
+    const isSpecialName = rawTagName === options.textNodeName || rawTagName === options.cdataPropName || rawTagName === options.commentPropName || rawTagName[0] === "?";
+    const tagName = isSpecialName ? rawTagName : resolveTagName(rawTagName, false, options, matcher, qNameValidator);
     const attrValues = extractAttributeValues(tagObj[":@"], options);
     matcher.push(tagName, attrValues);
     const isStopNode = checkStopNode(matcher, stopNodeExpressions);
     if (tagName === options.textNodeName) {
-      let tagText = tagObj[tagName];
+      let tagText = tagObj[rawTagName];
       if (!isStopNode) {
         tagText = options.tagValueProcessor(tagName, tagText);
         tagText = replaceEntitiesValue2(tagText, options);
       }
+      tagText = valToStr(tagText);
       if (isPreviousElementTag) {
         xmlStr += indentation;
       }
@@ -38850,21 +41515,23 @@ function arrToStr(arr, options, indentation, matcher, stopNodeExpressions) {
       if (isPreviousElementTag) {
         xmlStr += indentation;
       }
-      xmlStr += `<![CDATA[${tagObj[tagName][0][options.textNodeName]}]]>`;
+      const val = tagObj[rawTagName][0][options.textNodeName];
+      const safeVal = safeCdata(val);
+      xmlStr += `<![CDATA[${safeVal}]]>`;
       isPreviousElementTag = false;
       matcher.pop();
       continue;
     } else if (tagName === options.commentPropName) {
-      xmlStr += indentation + `<!--${tagObj[tagName][0][options.textNodeName]}-->`;
+      const val = tagObj[rawTagName][0][options.textNodeName];
+      const safeVal = safeComment(val);
+      xmlStr += indentation + `<!--${safeVal}-->`;
       isPreviousElementTag = true;
       matcher.pop();
       continue;
     } else if (tagName[0] === "?") {
-      const attStr2 = attr_to_str(tagObj[":@"], options, isStopNode);
+      const attStr2 = attr_to_str(tagObj[":@"], options, isStopNode, matcher, qNameValidator);
       const tempInd = tagName === "?xml" ? "" : indentation;
-      let piTextNodeName = tagObj[tagName][0][options.textNodeName];
-      piTextNodeName = piTextNodeName.length !== 0 ? " " + piTextNodeName : "";
-      xmlStr += tempInd + `<${tagName}${piTextNodeName}${attStr2}?>`;
+      xmlStr += tempInd + `<${tagName}${attStr2}?>`;
       isPreviousElementTag = true;
       matcher.pop();
       continue;
@@ -38873,13 +41540,13 @@ function arrToStr(arr, options, indentation, matcher, stopNodeExpressions) {
     if (newIdentation !== "") {
       newIdentation += options.indentBy;
     }
-    const attStr = attr_to_str(tagObj[":@"], options, isStopNode);
+    const attStr = attr_to_str(tagObj[":@"], options, isStopNode, matcher, qNameValidator);
     const tagStart = indentation + `<${tagName}${attStr}`;
     let tagValue;
     if (isStopNode) {
-      tagValue = getRawContent2(tagObj[tagName], options);
+      tagValue = getRawContent2(tagObj[rawTagName], options);
     } else {
-      tagValue = arrToStr(tagObj[tagName], options, newIdentation, matcher, stopNodeExpressions);
+      tagValue = arrToStr(tagObj[rawTagName], options, newIdentation, matcher, stopNodeExpressions, qNameValidator);
     }
     if (options.unpairedTags.indexOf(tagName) !== -1) {
       if (options.suppressUnpairedNode) xmlStr += tagStart + ">";
@@ -38910,7 +41577,7 @@ function extractAttributeValues(attrMap, options) {
   for (let attr in attrMap) {
     if (!Object.prototype.hasOwnProperty.call(attrMap, attr)) continue;
     const cleanAttrName = attr.startsWith(options.attributeNamePrefix) ? attr.substr(options.attributeNamePrefix.length) : attr;
-    attrValues[cleanAttrName] = attrMap[attr];
+    attrValues[cleanAttrName] = escapeAttribute(attrMap[attr]);
     hasAttrs = true;
   }
   return hasAttrs ? attrValues : null;
@@ -38919,7 +41586,7 @@ __name(extractAttributeValues, "extractAttributeValues");
 function getRawContent2(arr, options) {
   if (!Array.isArray(arr)) {
     if (arr !== void 0 && arr !== null) {
-      return arr.toString();
+      return valToStr(arr);
     }
     return "";
   }
@@ -38928,7 +41595,7 @@ function getRawContent2(arr, options) {
     const item = arr[i];
     const tagName = propName2(item);
     if (tagName === options.textNodeName) {
-      content += item[tagName];
+      content += valToStr(item[tagName]);
     } else if (tagName === options.cdataPropName) {
       content += item[tagName][0][options.textNodeName];
     } else if (tagName === options.commentPropName) {
@@ -38957,7 +41624,7 @@ function attr_to_str_raw(attrMap, options) {
       if (attrVal === true && options.suppressBooleanAttributes) {
         attrStr += ` ${attr.substr(options.attributeNamePrefix.length)}`;
       } else {
-        attrStr += ` ${attr.substr(options.attributeNamePrefix.length)}="${attrVal}"`;
+        attrStr += ` ${attr.substr(options.attributeNamePrefix.length)}="${escapeAttribute(attrVal)}"`;
       }
     }
   }
@@ -38973,11 +41640,13 @@ function propName2(obj) {
   }
 }
 __name(propName2, "propName");
-function attr_to_str(attrMap, options, isStopNode) {
+function attr_to_str(attrMap, options, isStopNode, matcher, qNameValidator) {
   let attrStr = "";
   if (attrMap && !options.ignoreAttributes) {
     for (let attr in attrMap) {
       if (!Object.prototype.hasOwnProperty.call(attrMap, attr)) continue;
+      const cleanAttrName = attr.substr(options.attributeNamePrefix.length);
+      const resolvedAttrName = isStopNode ? cleanAttrName : resolveTagName(cleanAttrName, true, options, matcher, qNameValidator);
       let attrVal;
       if (isStopNode) {
         attrVal = attrMap[attr];
@@ -38986,9 +41655,9 @@ function attr_to_str(attrMap, options, isStopNode) {
         attrVal = replaceEntitiesValue2(attrVal, options);
       }
       if (attrVal === true && options.suppressBooleanAttributes) {
-        attrStr += ` ${attr.substr(options.attributeNamePrefix.length)}`;
+        attrStr += ` ${resolvedAttrName}`;
       } else {
-        attrStr += ` ${attr.substr(options.attributeNamePrefix.length)}="${attrVal}"`;
+        attrStr += ` ${resolvedAttrName}="${escapeAttribute(attrVal)}"`;
       }
     }
   }
@@ -39072,8 +41741,13 @@ var defaultOptions3 = {
   // transformAttributeName: false,
   oneListGroup: false,
   maxNestedTags: 100,
-  jPath: true
+  jPath: true,
   // When true, callbacks receive string jPath; when false, receive Matcher instance
+  sanitizeName: false
+  // false = allow all names as-is (default, backward-compatible).
+  // Set to a function (name, { isAttribute, matcher }) => string to
+  // validate/sanitize tag and attribute names. Throw inside the function
+  // to reject an invalid name.
 };
 function Builder(options) {
   this.options = Object.assign({}, defaultOptions3, options);
@@ -39119,6 +41793,25 @@ function Builder(options) {
   }
 }
 __name(Builder, "Builder");
+function detectXmlVersionFromObj(jObj, options) {
+  const decl = jObj["?xml"];
+  if (decl && typeof decl === "object") {
+    if (options.attributesGroupName && decl[options.attributesGroupName]) {
+      const v2 = decl[options.attributesGroupName][options.attributeNamePrefix + "version"];
+      if (v2) return v2;
+    }
+    const v = decl[options.attributeNamePrefix + "version"];
+    if (v) return v;
+  }
+  return "1.0";
+}
+__name(detectXmlVersionFromObj, "detectXmlVersionFromObj");
+function resolveTagName2(name, isAttribute2, options, matcher, qNameValidator) {
+  if (!options.sanitizeName) return name;
+  if (qNameValidator(name)) return name;
+  return options.sanitizeName(name, { isAttribute: isAttribute2, matcher: matcher.readOnly() });
+}
+__name(resolveTagName2, "resolveTagName");
 Builder.prototype.build = function(jObj) {
   if (this.options.preserveOrder) {
     return toXml(jObj, this.options);
@@ -39129,10 +41822,12 @@ Builder.prototype.build = function(jObj) {
       };
     }
     const matcher = new Matcher();
-    return this.j2x(jObj, 0, matcher).val;
+    const xmlVersion = detectXmlVersionFromObj(jObj, this.options);
+    const qNameValidator = createValidator("qName", { xmlVersion });
+    return this.j2x(jObj, 0, matcher, qNameValidator).val;
   }
 };
-Builder.prototype.j2x = function(jObj, level, matcher) {
+Builder.prototype.j2x = function(jObj, level, matcher, qNameValidator) {
   let attrStr = "";
   let val = "";
   if (this.options.maxNestedTags && matcher.getDepth() >= this.options.maxNestedTags) {
@@ -39142,6 +41837,8 @@ Builder.prototype.j2x = function(jObj, level, matcher) {
   const isCurrentStopNode = this.checkStopNode(matcher);
   for (let key in jObj) {
     if (!Object.prototype.hasOwnProperty.call(jObj, key)) continue;
+    const isSpecialKey = key === this.options.textNodeName || key === this.options.cdataPropName || key === this.options.commentPropName || this.options.attributesGroupName && key === this.options.attributesGroupName || this.isAttribute(key) || key[0] === "?";
+    const resolvedKey = isSpecialKey ? key : resolveTagName2(key, false, this.options, matcher, qNameValidator);
     if (typeof jObj[key] === "undefined") {
       if (this.isAttribute(key)) {
         val += "";
@@ -39149,36 +41846,37 @@ Builder.prototype.j2x = function(jObj, level, matcher) {
     } else if (jObj[key] === null) {
       if (this.isAttribute(key)) {
         val += "";
-      } else if (key === this.options.cdataPropName) {
+      } else if (resolvedKey === this.options.cdataPropName || resolvedKey === this.options.commentPropName) {
         val += "";
-      } else if (key[0] === "?") {
-        val += this.indentate(level) + "<" + key + "?" + this.tagEndChar;
+      } else if (resolvedKey[0] === "?") {
+        val += this.indentate(level) + "<" + resolvedKey + "?" + this.tagEndChar;
       } else {
-        val += this.indentate(level) + "<" + key + "/" + this.tagEndChar;
+        val += this.indentate(level) + "<" + resolvedKey + "/" + this.tagEndChar;
       }
     } else if (jObj[key] instanceof Date) {
-      val += this.buildTextValNode(jObj[key], key, "", level, matcher);
+      val += this.buildTextValNode(jObj[key], resolvedKey, "", level, matcher);
     } else if (typeof jObj[key] !== "object") {
       const attr = this.isAttribute(key);
       if (attr && !this.ignoreAttributesFn(attr, jPath)) {
-        attrStr += this.buildAttrPairStr(attr, "" + jObj[key], isCurrentStopNode);
+        const resolvedAttr = resolveTagName2(attr, true, this.options, matcher, qNameValidator);
+        attrStr += this.buildAttrPairStr(resolvedAttr, valToStr(jObj[key]), isCurrentStopNode);
       } else if (!attr) {
         if (key === this.options.textNodeName) {
-          let newval = this.options.tagValueProcessor(key, "" + jObj[key]);
+          let newval = this.options.tagValueProcessor(key, valToStr(jObj[key]));
           val += this.replaceEntitiesValue(newval);
         } else {
-          matcher.push(key);
+          matcher.push(resolvedKey);
           const isStopNode = this.checkStopNode(matcher);
           matcher.pop();
           if (isStopNode) {
-            const textValue = "" + jObj[key];
+            const textValue = valToStr(jObj[key]);
             if (textValue === "") {
-              val += this.indentate(level) + "<" + key + this.closeTag(key) + this.tagEndChar;
+              val += this.indentate(level) + "<" + resolvedKey + this.closeTag(resolvedKey) + this.tagEndChar;
             } else {
-              val += this.indentate(level) + "<" + key + ">" + textValue + "</" + key + this.tagEndChar;
+              val += this.indentate(level) + "<" + resolvedKey + ">" + textValue + "</" + resolvedKey + this.tagEndChar;
             }
           } else {
-            val += this.buildTextValNode(jObj[key], key, "", level, matcher);
+            val += this.buildTextValNode(jObj[key], resolvedKey, "", level, matcher);
           }
         }
       }
@@ -39190,44 +41888,45 @@ Builder.prototype.j2x = function(jObj, level, matcher) {
         const item = jObj[key][j];
         if (typeof item === "undefined") {
         } else if (item === null) {
-          if (key[0] === "?") val += this.indentate(level) + "<" + key + "?" + this.tagEndChar;
-          else val += this.indentate(level) + "<" + key + "/" + this.tagEndChar;
+          if (resolvedKey[0] === "?") val += this.indentate(level) + "<" + resolvedKey + "?" + this.tagEndChar;
+          else val += this.indentate(level) + "<" + resolvedKey + "/" + this.tagEndChar;
         } else if (typeof item === "object") {
           if (this.options.oneListGroup) {
-            matcher.push(key);
-            const result = this.j2x(item, level + 1, matcher);
+            matcher.push(resolvedKey);
+            const result = this.j2x(item, level + 1, matcher, qNameValidator);
             matcher.pop();
             listTagVal += result.val;
             if (this.options.attributesGroupName && item.hasOwnProperty(this.options.attributesGroupName)) {
               listTagAttr += result.attrStr;
             }
           } else {
-            listTagVal += this.processTextOrObjNode(item, key, level, matcher);
+            listTagVal += this.processTextOrObjNode(item, resolvedKey, level, matcher, qNameValidator);
           }
         } else {
           if (this.options.oneListGroup) {
-            let textValue = this.options.tagValueProcessor(key, item);
+            let textValue = this.options.tagValueProcessor(resolvedKey, item);
             textValue = this.replaceEntitiesValue(textValue);
+            textValue = valToStr(textValue);
             listTagVal += textValue;
           } else {
-            matcher.push(key);
+            matcher.push(resolvedKey);
             const isStopNode = this.checkStopNode(matcher);
             matcher.pop();
             if (isStopNode) {
-              const textValue = "" + item;
+              const textValue = valToStr(item);
               if (textValue === "") {
-                listTagVal += this.indentate(level) + "<" + key + this.closeTag(key) + this.tagEndChar;
+                listTagVal += this.indentate(level) + "<" + resolvedKey + this.closeTag(resolvedKey) + this.tagEndChar;
               } else {
-                listTagVal += this.indentate(level) + "<" + key + ">" + textValue + "</" + key + this.tagEndChar;
+                listTagVal += this.indentate(level) + "<" + resolvedKey + ">" + textValue + "</" + resolvedKey + this.tagEndChar;
               }
             } else {
-              listTagVal += this.buildTextValNode(item, key, "", level, matcher);
+              listTagVal += this.buildTextValNode(item, resolvedKey, "", level, matcher);
             }
           }
         }
       }
       if (this.options.oneListGroup) {
-        listTagVal = this.buildObjectNode(listTagVal, key, listTagAttr, level);
+        listTagVal = this.buildObjectNode(listTagVal, resolvedKey, listTagAttr, level);
       }
       val += listTagVal;
     } else {
@@ -39235,10 +41934,11 @@ Builder.prototype.j2x = function(jObj, level, matcher) {
         const Ks = Object.keys(jObj[key]);
         const L = Ks.length;
         for (let j = 0; j < L; j++) {
-          attrStr += this.buildAttrPairStr(Ks[j], "" + jObj[key][Ks[j]], isCurrentStopNode);
+          const resolvedAttr = resolveTagName2(Ks[j], true, this.options, matcher, qNameValidator);
+          attrStr += this.buildAttrPairStr(resolvedAttr, valToStr(jObj[key][Ks[j]]), isCurrentStopNode);
         }
       } else {
-        val += this.processTextOrObjNode(jObj[key], key, level, matcher);
+        val += this.processTextOrObjNode(jObj[key], resolvedKey, level, matcher, qNameValidator);
       }
     }
   }
@@ -39246,14 +41946,14 @@ Builder.prototype.j2x = function(jObj, level, matcher) {
 };
 Builder.prototype.buildAttrPairStr = function(attrName, val, isStopNode) {
   if (!isStopNode) {
-    val = this.options.attributeValueProcessor(attrName, "" + val);
+    val = this.options.attributeValueProcessor(attrName, valToStr(val));
     val = this.replaceEntitiesValue(val);
   }
   if (this.options.suppressBooleanAttributes && val === "true") {
     return " " + attrName;
-  } else return " " + attrName + '="' + val + '"';
+  } else return " " + attrName + '="' + escapeAttribute(val) + '"';
 };
-function processTextOrObjNode(object, key, level, matcher) {
+function processTextOrObjNode(object, key, level, matcher, qNameValidator) {
   const attrValues = this.extractAttributes(object);
   matcher.push(key, attrValues);
   const isStopNode = this.checkStopNode(matcher);
@@ -39263,9 +41963,11 @@ function processTextOrObjNode(object, key, level, matcher) {
     matcher.pop();
     return this.buildObjectNode(rawContent2, key, attrStr, level);
   }
-  const result = this.j2x(object, level + 1, matcher);
+  const result = this.j2x(object, level + 1, matcher, qNameValidator);
   matcher.pop();
-  if (object[this.options.textNodeName] !== void 0 && Object.keys(object).length === 1) {
+  if (key[0] === "?") {
+    return this.buildTextValNode("", key, result.attrStr, level, matcher);
+  } else if (object[this.options.textNodeName] !== void 0 && Object.keys(object).length === 1) {
     return this.buildTextValNode(object[this.options.textNodeName], key, result.attrStr, level, matcher);
   } else {
     return this.buildObjectNode(result.val, key, result.attrStr, level);
@@ -39281,7 +41983,7 @@ Builder.prototype.extractAttributes = function(obj) {
     for (let attrKey in attrGroup) {
       if (!Object.prototype.hasOwnProperty.call(attrGroup, attrKey)) continue;
       const cleanKey = attrKey.startsWith(this.options.attributeNamePrefix) ? attrKey.substring(this.options.attributeNamePrefix.length) : attrKey;
-      attrValues[cleanKey] = attrGroup[attrKey];
+      attrValues[cleanKey] = escapeAttribute(attrGroup[attrKey]);
       hasAttrs = true;
     }
   } else {
@@ -39289,7 +41991,7 @@ Builder.prototype.extractAttributes = function(obj) {
       if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
       const attr = this.isAttribute(key);
       if (attr) {
-        attrValues[attr] = obj[key];
+        attrValues[attr] = escapeAttribute(obj[key]);
         hasAttrs = true;
       }
     }
@@ -39354,7 +42056,7 @@ Builder.prototype.buildAttributesForStopNode = function(obj) {
       if (val === true && this.options.suppressBooleanAttributes) {
         attrStr += " " + cleanKey;
       } else {
-        attrStr += " " + cleanKey + '="' + val + '"';
+        attrStr += " " + cleanKey + '="' + escapeAttribute(val) + '"';
       }
     }
   } else {
@@ -39366,7 +42068,7 @@ Builder.prototype.buildAttributesForStopNode = function(obj) {
         if (val === true && this.options.suppressBooleanAttributes) {
           attrStr += " " + attr;
         } else {
-          attrStr += " " + attr + '="' + val + '"';
+          attrStr += " " + attr + '="' + escapeAttribute(val) + '"';
         }
       }
     }
@@ -39379,6 +42081,8 @@ Builder.prototype.buildObjectNode = function(val, key, attrStr, level) {
     else {
       return this.indentate(level) + "<" + key + attrStr + this.closeTag(key) + this.tagEndChar;
     }
+  } else if (key[0] === "?") {
+    return this.indentate(level) + "<" + key + attrStr + "?" + this.tagEndChar;
   } else {
     let tagEndExp = "</" + key + this.tagEndChar;
     let piClosingChar = "";
@@ -39389,7 +42093,7 @@ Builder.prototype.buildObjectNode = function(val, key, attrStr, level) {
     if ((attrStr || attrStr === "") && val.indexOf("<") === -1) {
       return this.indentate(level) + "<" + key + attrStr + piClosingChar + ">" + val + tagEndExp;
     } else if (this.options.commentPropName !== false && key === this.options.commentPropName && piClosingChar.length === 0) {
-      return this.indentate(level) + `<!--${val}-->` + this.newLine;
+      return this.indentate(level) + `<!--${safeComment(val)}-->` + this.newLine;
     } else {
       return this.indentate(level) + "<" + key + attrStr + piClosingChar + this.tagEndChar + val + this.indentate(level) + tagEndExp;
     }
@@ -39417,14 +42121,17 @@ Builder.prototype.checkStopNode = function(matcher) {
 };
 Builder.prototype.buildTextValNode = function(val, key, attrStr, level, matcher) {
   if (this.options.cdataPropName !== false && key === this.options.cdataPropName) {
-    return this.indentate(level) + `<![CDATA[${val}]]>` + this.newLine;
+    const safeVal = safeCdata(val);
+    return this.indentate(level) + `<![CDATA[${safeVal}]]>` + this.newLine;
   } else if (this.options.commentPropName !== false && key === this.options.commentPropName) {
-    return this.indentate(level) + `<!--${val}-->` + this.newLine;
+    const safeVal = safeComment(val);
+    return this.indentate(level) + `<!--${safeVal}-->` + this.newLine;
   } else if (key[0] === "?") {
     return this.indentate(level) + "<" + key + attrStr + "?" + this.tagEndChar;
   } else {
     let textValue = this.options.tagValueProcessor(key, val);
     textValue = this.replaceEntitiesValue(textValue);
+    textValue = valToStr(textValue);
     if (textValue === "") {
       return this.indentate(level) + "<" + key + attrStr + this.closeTag(key) + this.tagEndChar;
     } else {
@@ -63067,26 +65774,26 @@ __name(saveCache, "saveCache");
 
 // node_modules/@actions/cache/lib/generated/results/api/v1/cache.js
 var import_runtime_rpc = __toESM(require_commonjs2(), 1);
+var import_runtime264 = __toESM(require_commonjs(), 1);
+var import_runtime265 = __toESM(require_commonjs(), 1);
+var import_runtime266 = __toESM(require_commonjs(), 1);
+var import_runtime267 = __toESM(require_commonjs(), 1);
+var import_runtime268 = __toESM(require_commonjs(), 1);
+
+// node_modules/@actions/cache/lib/generated/results/entities/v1/cachemetadata.js
 var import_runtime258 = __toESM(require_commonjs(), 1);
 var import_runtime259 = __toESM(require_commonjs(), 1);
 var import_runtime260 = __toESM(require_commonjs(), 1);
 var import_runtime261 = __toESM(require_commonjs(), 1);
 var import_runtime262 = __toESM(require_commonjs(), 1);
 
-// node_modules/@actions/cache/lib/generated/results/entities/v1/cachemetadata.js
+// node_modules/@actions/cache/lib/generated/results/entities/v1/cachescope.js
 var import_runtime252 = __toESM(require_commonjs(), 1);
 var import_runtime253 = __toESM(require_commonjs(), 1);
 var import_runtime254 = __toESM(require_commonjs(), 1);
 var import_runtime255 = __toESM(require_commonjs(), 1);
 var import_runtime256 = __toESM(require_commonjs(), 1);
-
-// node_modules/@actions/cache/lib/generated/results/entities/v1/cachescope.js
-var import_runtime246 = __toESM(require_commonjs(), 1);
-var import_runtime247 = __toESM(require_commonjs(), 1);
-var import_runtime248 = __toESM(require_commonjs(), 1);
-var import_runtime249 = __toESM(require_commonjs(), 1);
-var import_runtime250 = __toESM(require_commonjs(), 1);
-var CacheScope$Type = class extends import_runtime250.MessageType {
+var CacheScope$Type = class extends import_runtime256.MessageType {
   static {
     __name(this, "CacheScope$Type");
   }
@@ -63110,9 +65817,9 @@ var CacheScope$Type = class extends import_runtime250.MessageType {
   }
   create(value) {
     const message = { scope: "", permission: "0" };
-    globalThis.Object.defineProperty(message, import_runtime249.MESSAGE_TYPE, { enumerable: false, value: this });
+    globalThis.Object.defineProperty(message, import_runtime255.MESSAGE_TYPE, { enumerable: false, value: this });
     if (value !== void 0)
-      (0, import_runtime248.reflectionMergePartial)(this, message, value);
+      (0, import_runtime254.reflectionMergePartial)(this, message, value);
     return message;
   }
   internalBinaryRead(reader, length, options, target) {
@@ -63134,26 +65841,26 @@ var CacheScope$Type = class extends import_runtime250.MessageType {
             throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
           let d = reader.skip(wireType);
           if (u !== false)
-            (u === true ? import_runtime247.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            (u === true ? import_runtime253.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
       }
     }
     return message;
   }
   internalBinaryWrite(message, writer, options) {
     if (message.scope !== "")
-      writer.tag(1, import_runtime246.WireType.LengthDelimited).string(message.scope);
+      writer.tag(1, import_runtime252.WireType.LengthDelimited).string(message.scope);
     if (message.permission !== "0")
-      writer.tag(2, import_runtime246.WireType.Varint).int64(message.permission);
+      writer.tag(2, import_runtime252.WireType.Varint).int64(message.permission);
     let u = options.writeUnknownFields;
     if (u !== false)
-      (u == true ? import_runtime247.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+      (u == true ? import_runtime253.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
     return writer;
   }
 };
 var CacheScope = new CacheScope$Type();
 
 // node_modules/@actions/cache/lib/generated/results/entities/v1/cachemetadata.js
-var CacheMetadata$Type = class extends import_runtime256.MessageType {
+var CacheMetadata$Type = class extends import_runtime262.MessageType {
   static {
     __name(this, "CacheMetadata$Type");
   }
@@ -63171,9 +65878,9 @@ var CacheMetadata$Type = class extends import_runtime256.MessageType {
   }
   create(value) {
     const message = { repositoryId: "0", scope: [] };
-    globalThis.Object.defineProperty(message, import_runtime255.MESSAGE_TYPE, { enumerable: false, value: this });
+    globalThis.Object.defineProperty(message, import_runtime261.MESSAGE_TYPE, { enumerable: false, value: this });
     if (value !== void 0)
-      (0, import_runtime254.reflectionMergePartial)(this, message, value);
+      (0, import_runtime260.reflectionMergePartial)(this, message, value);
     return message;
   }
   internalBinaryRead(reader, length, options, target) {
@@ -63195,26 +65902,26 @@ var CacheMetadata$Type = class extends import_runtime256.MessageType {
             throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
           let d = reader.skip(wireType);
           if (u !== false)
-            (u === true ? import_runtime253.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            (u === true ? import_runtime259.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
       }
     }
     return message;
   }
   internalBinaryWrite(message, writer, options) {
     if (message.repositoryId !== "0")
-      writer.tag(1, import_runtime252.WireType.Varint).int64(message.repositoryId);
+      writer.tag(1, import_runtime258.WireType.Varint).int64(message.repositoryId);
     for (let i = 0; i < message.scope.length; i++)
-      CacheScope.internalBinaryWrite(message.scope[i], writer.tag(2, import_runtime252.WireType.LengthDelimited).fork(), options).join();
+      CacheScope.internalBinaryWrite(message.scope[i], writer.tag(2, import_runtime258.WireType.LengthDelimited).fork(), options).join();
     let u = options.writeUnknownFields;
     if (u !== false)
-      (u == true ? import_runtime253.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+      (u == true ? import_runtime259.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
     return writer;
   }
 };
 var CacheMetadata = new CacheMetadata$Type();
 
 // node_modules/@actions/cache/lib/generated/results/api/v1/cache.js
-var CreateCacheEntryRequest$Type = class extends import_runtime262.MessageType {
+var CreateCacheEntryRequest$Type = class extends import_runtime268.MessageType {
   static {
     __name(this, "CreateCacheEntryRequest$Type");
   }
@@ -63239,9 +65946,9 @@ var CreateCacheEntryRequest$Type = class extends import_runtime262.MessageType {
   }
   create(value) {
     const message = { key: "", version: "" };
-    globalThis.Object.defineProperty(message, import_runtime261.MESSAGE_TYPE, { enumerable: false, value: this });
+    globalThis.Object.defineProperty(message, import_runtime267.MESSAGE_TYPE, { enumerable: false, value: this });
     if (value !== void 0)
-      (0, import_runtime260.reflectionMergePartial)(this, message, value);
+      (0, import_runtime266.reflectionMergePartial)(this, message, value);
     return message;
   }
   internalBinaryRead(reader, length, options, target) {
@@ -63267,26 +65974,26 @@ var CreateCacheEntryRequest$Type = class extends import_runtime262.MessageType {
             throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
           let d = reader.skip(wireType);
           if (u !== false)
-            (u === true ? import_runtime259.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            (u === true ? import_runtime265.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
       }
     }
     return message;
   }
   internalBinaryWrite(message, writer, options) {
     if (message.metadata)
-      CacheMetadata.internalBinaryWrite(message.metadata, writer.tag(1, import_runtime258.WireType.LengthDelimited).fork(), options).join();
+      CacheMetadata.internalBinaryWrite(message.metadata, writer.tag(1, import_runtime264.WireType.LengthDelimited).fork(), options).join();
     if (message.key !== "")
-      writer.tag(2, import_runtime258.WireType.LengthDelimited).string(message.key);
+      writer.tag(2, import_runtime264.WireType.LengthDelimited).string(message.key);
     if (message.version !== "")
-      writer.tag(3, import_runtime258.WireType.LengthDelimited).string(message.version);
+      writer.tag(3, import_runtime264.WireType.LengthDelimited).string(message.version);
     let u = options.writeUnknownFields;
     if (u !== false)
-      (u == true ? import_runtime259.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+      (u == true ? import_runtime265.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
     return writer;
   }
 };
 var CreateCacheEntryRequest = new CreateCacheEntryRequest$Type();
-var CreateCacheEntryResponse$Type = class extends import_runtime262.MessageType {
+var CreateCacheEntryResponse$Type = class extends import_runtime268.MessageType {
   static {
     __name(this, "CreateCacheEntryResponse$Type");
   }
@@ -63317,9 +66024,9 @@ var CreateCacheEntryResponse$Type = class extends import_runtime262.MessageType 
   }
   create(value) {
     const message = { ok: false, signedUploadUrl: "", message: "" };
-    globalThis.Object.defineProperty(message, import_runtime261.MESSAGE_TYPE, { enumerable: false, value: this });
+    globalThis.Object.defineProperty(message, import_runtime267.MESSAGE_TYPE, { enumerable: false, value: this });
     if (value !== void 0)
-      (0, import_runtime260.reflectionMergePartial)(this, message, value);
+      (0, import_runtime266.reflectionMergePartial)(this, message, value);
     return message;
   }
   internalBinaryRead(reader, length, options, target) {
@@ -63345,26 +66052,26 @@ var CreateCacheEntryResponse$Type = class extends import_runtime262.MessageType 
             throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
           let d = reader.skip(wireType);
           if (u !== false)
-            (u === true ? import_runtime259.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            (u === true ? import_runtime265.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
       }
     }
     return message;
   }
   internalBinaryWrite(message, writer, options) {
     if (message.ok !== false)
-      writer.tag(1, import_runtime258.WireType.Varint).bool(message.ok);
+      writer.tag(1, import_runtime264.WireType.Varint).bool(message.ok);
     if (message.signedUploadUrl !== "")
-      writer.tag(2, import_runtime258.WireType.LengthDelimited).string(message.signedUploadUrl);
+      writer.tag(2, import_runtime264.WireType.LengthDelimited).string(message.signedUploadUrl);
     if (message.message !== "")
-      writer.tag(3, import_runtime258.WireType.LengthDelimited).string(message.message);
+      writer.tag(3, import_runtime264.WireType.LengthDelimited).string(message.message);
     let u = options.writeUnknownFields;
     if (u !== false)
-      (u == true ? import_runtime259.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+      (u == true ? import_runtime265.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
     return writer;
   }
 };
 var CreateCacheEntryResponse = new CreateCacheEntryResponse$Type();
-var FinalizeCacheEntryUploadRequest$Type = class extends import_runtime262.MessageType {
+var FinalizeCacheEntryUploadRequest$Type = class extends import_runtime268.MessageType {
   static {
     __name(this, "FinalizeCacheEntryUploadRequest$Type");
   }
@@ -63396,9 +66103,9 @@ var FinalizeCacheEntryUploadRequest$Type = class extends import_runtime262.Messa
   }
   create(value) {
     const message = { key: "", sizeBytes: "0", version: "" };
-    globalThis.Object.defineProperty(message, import_runtime261.MESSAGE_TYPE, { enumerable: false, value: this });
+    globalThis.Object.defineProperty(message, import_runtime267.MESSAGE_TYPE, { enumerable: false, value: this });
     if (value !== void 0)
-      (0, import_runtime260.reflectionMergePartial)(this, message, value);
+      (0, import_runtime266.reflectionMergePartial)(this, message, value);
     return message;
   }
   internalBinaryRead(reader, length, options, target) {
@@ -63428,28 +66135,28 @@ var FinalizeCacheEntryUploadRequest$Type = class extends import_runtime262.Messa
             throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
           let d = reader.skip(wireType);
           if (u !== false)
-            (u === true ? import_runtime259.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            (u === true ? import_runtime265.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
       }
     }
     return message;
   }
   internalBinaryWrite(message, writer, options) {
     if (message.metadata)
-      CacheMetadata.internalBinaryWrite(message.metadata, writer.tag(1, import_runtime258.WireType.LengthDelimited).fork(), options).join();
+      CacheMetadata.internalBinaryWrite(message.metadata, writer.tag(1, import_runtime264.WireType.LengthDelimited).fork(), options).join();
     if (message.key !== "")
-      writer.tag(2, import_runtime258.WireType.LengthDelimited).string(message.key);
+      writer.tag(2, import_runtime264.WireType.LengthDelimited).string(message.key);
     if (message.sizeBytes !== "0")
-      writer.tag(3, import_runtime258.WireType.Varint).int64(message.sizeBytes);
+      writer.tag(3, import_runtime264.WireType.Varint).int64(message.sizeBytes);
     if (message.version !== "")
-      writer.tag(4, import_runtime258.WireType.LengthDelimited).string(message.version);
+      writer.tag(4, import_runtime264.WireType.LengthDelimited).string(message.version);
     let u = options.writeUnknownFields;
     if (u !== false)
-      (u == true ? import_runtime259.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+      (u == true ? import_runtime265.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
     return writer;
   }
 };
 var FinalizeCacheEntryUploadRequest = new FinalizeCacheEntryUploadRequest$Type();
-var FinalizeCacheEntryUploadResponse$Type = class extends import_runtime262.MessageType {
+var FinalizeCacheEntryUploadResponse$Type = class extends import_runtime268.MessageType {
   static {
     __name(this, "FinalizeCacheEntryUploadResponse$Type");
   }
@@ -63480,9 +66187,9 @@ var FinalizeCacheEntryUploadResponse$Type = class extends import_runtime262.Mess
   }
   create(value) {
     const message = { ok: false, entryId: "0", message: "" };
-    globalThis.Object.defineProperty(message, import_runtime261.MESSAGE_TYPE, { enumerable: false, value: this });
+    globalThis.Object.defineProperty(message, import_runtime267.MESSAGE_TYPE, { enumerable: false, value: this });
     if (value !== void 0)
-      (0, import_runtime260.reflectionMergePartial)(this, message, value);
+      (0, import_runtime266.reflectionMergePartial)(this, message, value);
     return message;
   }
   internalBinaryRead(reader, length, options, target) {
@@ -63508,26 +66215,26 @@ var FinalizeCacheEntryUploadResponse$Type = class extends import_runtime262.Mess
             throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
           let d = reader.skip(wireType);
           if (u !== false)
-            (u === true ? import_runtime259.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            (u === true ? import_runtime265.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
       }
     }
     return message;
   }
   internalBinaryWrite(message, writer, options) {
     if (message.ok !== false)
-      writer.tag(1, import_runtime258.WireType.Varint).bool(message.ok);
+      writer.tag(1, import_runtime264.WireType.Varint).bool(message.ok);
     if (message.entryId !== "0")
-      writer.tag(2, import_runtime258.WireType.Varint).int64(message.entryId);
+      writer.tag(2, import_runtime264.WireType.Varint).int64(message.entryId);
     if (message.message !== "")
-      writer.tag(3, import_runtime258.WireType.LengthDelimited).string(message.message);
+      writer.tag(3, import_runtime264.WireType.LengthDelimited).string(message.message);
     let u = options.writeUnknownFields;
     if (u !== false)
-      (u == true ? import_runtime259.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+      (u == true ? import_runtime265.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
     return writer;
   }
 };
 var FinalizeCacheEntryUploadResponse = new FinalizeCacheEntryUploadResponse$Type();
-var GetCacheEntryDownloadURLRequest$Type = class extends import_runtime262.MessageType {
+var GetCacheEntryDownloadURLRequest$Type = class extends import_runtime268.MessageType {
   static {
     __name(this, "GetCacheEntryDownloadURLRequest$Type");
   }
@@ -63560,9 +66267,9 @@ var GetCacheEntryDownloadURLRequest$Type = class extends import_runtime262.Messa
   }
   create(value) {
     const message = { key: "", restoreKeys: [], version: "" };
-    globalThis.Object.defineProperty(message, import_runtime261.MESSAGE_TYPE, { enumerable: false, value: this });
+    globalThis.Object.defineProperty(message, import_runtime267.MESSAGE_TYPE, { enumerable: false, value: this });
     if (value !== void 0)
-      (0, import_runtime260.reflectionMergePartial)(this, message, value);
+      (0, import_runtime266.reflectionMergePartial)(this, message, value);
     return message;
   }
   internalBinaryRead(reader, length, options, target) {
@@ -63592,28 +66299,28 @@ var GetCacheEntryDownloadURLRequest$Type = class extends import_runtime262.Messa
             throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
           let d = reader.skip(wireType);
           if (u !== false)
-            (u === true ? import_runtime259.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            (u === true ? import_runtime265.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
       }
     }
     return message;
   }
   internalBinaryWrite(message, writer, options) {
     if (message.metadata)
-      CacheMetadata.internalBinaryWrite(message.metadata, writer.tag(1, import_runtime258.WireType.LengthDelimited).fork(), options).join();
+      CacheMetadata.internalBinaryWrite(message.metadata, writer.tag(1, import_runtime264.WireType.LengthDelimited).fork(), options).join();
     if (message.key !== "")
-      writer.tag(2, import_runtime258.WireType.LengthDelimited).string(message.key);
+      writer.tag(2, import_runtime264.WireType.LengthDelimited).string(message.key);
     for (let i = 0; i < message.restoreKeys.length; i++)
-      writer.tag(3, import_runtime258.WireType.LengthDelimited).string(message.restoreKeys[i]);
+      writer.tag(3, import_runtime264.WireType.LengthDelimited).string(message.restoreKeys[i]);
     if (message.version !== "")
-      writer.tag(4, import_runtime258.WireType.LengthDelimited).string(message.version);
+      writer.tag(4, import_runtime264.WireType.LengthDelimited).string(message.version);
     let u = options.writeUnknownFields;
     if (u !== false)
-      (u == true ? import_runtime259.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+      (u == true ? import_runtime265.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
     return writer;
   }
 };
 var GetCacheEntryDownloadURLRequest = new GetCacheEntryDownloadURLRequest$Type();
-var GetCacheEntryDownloadURLResponse$Type = class extends import_runtime262.MessageType {
+var GetCacheEntryDownloadURLResponse$Type = class extends import_runtime268.MessageType {
   static {
     __name(this, "GetCacheEntryDownloadURLResponse$Type");
   }
@@ -63644,9 +66351,9 @@ var GetCacheEntryDownloadURLResponse$Type = class extends import_runtime262.Mess
   }
   create(value) {
     const message = { ok: false, signedDownloadUrl: "", matchedKey: "" };
-    globalThis.Object.defineProperty(message, import_runtime261.MESSAGE_TYPE, { enumerable: false, value: this });
+    globalThis.Object.defineProperty(message, import_runtime267.MESSAGE_TYPE, { enumerable: false, value: this });
     if (value !== void 0)
-      (0, import_runtime260.reflectionMergePartial)(this, message, value);
+      (0, import_runtime266.reflectionMergePartial)(this, message, value);
     return message;
   }
   internalBinaryRead(reader, length, options, target) {
@@ -63672,21 +66379,21 @@ var GetCacheEntryDownloadURLResponse$Type = class extends import_runtime262.Mess
             throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
           let d = reader.skip(wireType);
           if (u !== false)
-            (u === true ? import_runtime259.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            (u === true ? import_runtime265.UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
       }
     }
     return message;
   }
   internalBinaryWrite(message, writer, options) {
     if (message.ok !== false)
-      writer.tag(1, import_runtime258.WireType.Varint).bool(message.ok);
+      writer.tag(1, import_runtime264.WireType.Varint).bool(message.ok);
     if (message.signedDownloadUrl !== "")
-      writer.tag(2, import_runtime258.WireType.LengthDelimited).string(message.signedDownloadUrl);
+      writer.tag(2, import_runtime264.WireType.LengthDelimited).string(message.signedDownloadUrl);
     if (message.matchedKey !== "")
-      writer.tag(3, import_runtime258.WireType.LengthDelimited).string(message.matchedKey);
+      writer.tag(3, import_runtime264.WireType.LengthDelimited).string(message.matchedKey);
     let u = options.writeUnknownFields;
     if (u !== false)
-      (u == true ? import_runtime259.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+      (u == true ? import_runtime265.UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
     return writer;
   }
 };
@@ -64855,6 +67562,9 @@ var closePattern = /\\}/g;
 var commaPattern = /\\,/g;
 var periodPattern = /\\\./g;
 var EXPANSION_MAX = 1e5;
+var EXPANSION_MAX_LENGTH = 4e6;
+var EXPANSION_MAX_DEPTH = 1e3;
+var EXPANSION_MAX_REWRITES = 1e3;
 function numeric(str) {
   return !isNaN(str) ? parseInt(str, 10) : str.charCodeAt(0);
 }
@@ -64867,37 +67577,46 @@ function unescapeBraces(str) {
   return str.replace(escSlashPattern, "\\").replace(escOpenPattern, "{").replace(escClosePattern, "}").replace(escCommaPattern, ",").replace(escPeriodPattern, ".");
 }
 __name(unescapeBraces, "unescapeBraces");
+function pushAll(target, items) {
+  for (let i = 0; i < items.length; i++) {
+    target.push(items[i]);
+  }
+}
+__name(pushAll, "pushAll");
 function parseCommaParts(str) {
-  if (!str) {
-    return [""];
-  }
   const parts = [];
-  const m = balanced("{", "}", str);
-  if (!m) {
-    return str.split(",");
+  let carry = "";
+  for (; ; ) {
+    const m = balanced("{", "}", str);
+    if (!m) {
+      const tail = str.split(",");
+      tail[0] = carry + tail[0];
+      pushAll(parts, tail);
+      return parts;
+    }
+    const { pre, body: body2, post } = m;
+    const p = pre.split(",");
+    p[0] = carry + p[0];
+    p[p.length - 1] += "{" + body2 + "}";
+    if (!post.length) {
+      pushAll(parts, p);
+      return parts;
+    }
+    carry = p.pop();
+    pushAll(parts, p);
+    str = post;
   }
-  const { pre, body: body2, post } = m;
-  const p = pre.split(",");
-  p[p.length - 1] += "{" + body2 + "}";
-  const postParts = parseCommaParts(post);
-  if (post.length) {
-    ;
-    p[p.length - 1] += postParts.shift();
-    p.push.apply(p, postParts);
-  }
-  parts.push.apply(parts, p);
-  return parts;
 }
 __name(parseCommaParts, "parseCommaParts");
 function expand(str, options = {}) {
   if (!str) {
     return [];
   }
-  const { max = EXPANSION_MAX } = options;
+  const { max = EXPANSION_MAX, maxLength = EXPANSION_MAX_LENGTH, maxDepth = EXPANSION_MAX_DEPTH, maxRewrites = EXPANSION_MAX_REWRITES } = options;
   if (str.slice(0, 2) === "{}") {
     str = "\\{\\}" + str.slice(2);
   }
-  return expand_(escapeBraces(str), max, true).map(unescapeBraces);
+  return expand_(escapeBraces(str), max, maxLength, maxDepth, 0, maxRewrites, true).map(unescapeBraces);
 }
 __name(expand, "expand");
 function embrace(str) {
@@ -64916,95 +67635,154 @@ function gte(i, y) {
   return i >= y;
 }
 __name(gte, "gte");
-function expand_(str, max, isTop) {
-  const expansions = [];
-  const m = balanced("{", "}", str);
-  if (!m)
-    return [str];
-  const pre = m.pre;
-  const post = m.post.length ? expand_(m.post, max, false) : [""];
-  if (/\$$/.test(m.pre)) {
-    for (let k = 0; k < post.length && k < max; k++) {
-      const expansion = pre + "{" + m.body + "}" + post[k];
-      expansions.push(expansion);
+function combine(acc, pre, values, max, maxLength, dropEmpties) {
+  const out = [];
+  let length = 0;
+  for (let a = 0; a < acc.length; a++) {
+    for (let v = 0; v < values.length; v++) {
+      if (out.length >= max)
+        return out;
+      const expansion = acc[a] + pre + values[v];
+      if (dropEmpties && !expansion)
+        continue;
+      if (length + expansion.length > maxLength)
+        return out;
+      out.push(expansion);
+      length += expansion.length;
     }
-  } else {
+  }
+  return out;
+}
+__name(combine, "combine");
+function expandSequence(body2, isAlphaSequence, max, maxLength) {
+  const n = body2.split(/\.\./);
+  const N = [];
+  if (n[0] === void 0 || n[1] === void 0) {
+    return N;
+  }
+  const x = numeric(n[0]);
+  const y = numeric(n[1]);
+  const width = Math.max(n[0].length, n[1].length);
+  let incr = n.length === 3 && n[2] !== void 0 ? Math.max(Math.abs(numeric(n[2])), 1) : 1;
+  let test = lte;
+  const reverse = y < x;
+  if (reverse) {
+    incr *= -1;
+    test = gte;
+  }
+  const pad = n.some(isPadded);
+  let length = 0;
+  for (let i = x; test(i, y) && N.length < max; i += incr) {
+    let c;
+    if (isAlphaSequence) {
+      c = String.fromCharCode(i);
+      if (c === "\\") {
+        c = "";
+      }
+    } else {
+      c = String(i);
+      if (pad) {
+        const need = width - c.length;
+        if (need > 0) {
+          const z = new Array(need + 1).join("0");
+          if (i < 0) {
+            c = "-" + z + c.slice(1);
+          } else {
+            c = z + c;
+          }
+        }
+      }
+    }
+    if (length + c.length > maxLength)
+      break;
+    N.push(c);
+    length += c.length;
+  }
+  return N;
+}
+__name(expandSequence, "expandSequence");
+function expand_(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
+  if (depth > maxDepth) {
+    return [str];
+  }
+  let acc = [""];
+  let rewrites = 0;
+  let dropEmpties = false;
+  let firstGroup = true;
+  for (; ; ) {
+    const m = balanced("{", "}", str);
+    if (!m) {
+      return combine(acc, str, [""], max, maxLength, dropEmpties);
+    }
+    const pre = m.pre;
+    if (/\$$/.test(pre)) {
+      acc = combine(acc, pre + "{" + m.body + "}", [""], max, maxLength, dropEmpties && !m.post.length);
+      firstGroup = false;
+      if (!m.post.length)
+        break;
+      str = m.post;
+      continue;
+    }
     const isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m.body);
     const isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m.body);
     const isSequence = isNumericSequence || isAlphaSequence;
     const isOptions = m.body.indexOf(",") >= 0;
     if (!isSequence && !isOptions) {
-      if (m.post.match(/,(?!,).*\}/)) {
+      if (rewrites < maxRewrites && m.post.match(/,(?!,).*\}/)) {
+        rewrites++;
         str = m.pre + "{" + m.body + escClose + m.post;
-        return expand_(str, max, true);
+        isTop = true;
+        continue;
       }
-      return [str];
+      return combine(acc, pre + "{" + m.body + "}" + m.post, [""], max, maxLength, dropEmpties);
     }
-    let n;
+    if (firstGroup) {
+      dropEmpties = isTop && !isSequence;
+      firstGroup = false;
+    }
+    let values;
     if (isSequence) {
-      n = m.body.split(/\.\./);
+      values = expandSequence(m.body, isAlphaSequence, max, maxLength);
     } else {
-      n = parseCommaParts(m.body);
+      let n = parseCommaParts(m.body);
       if (n.length === 1 && n[0] !== void 0) {
-        n = expand_(n[0], max, false).map(embrace);
+        n = expand_(n[0], max, maxLength, maxDepth, depth + 1, maxRewrites, false).map(embrace);
         if (n.length === 1) {
-          return post.map((p) => m.pre + n[0] + p);
+          acc = combine(acc, pre + n[0], [""], max, maxLength, dropEmpties && !m.post.length);
+          if (!m.post.length)
+            break;
+          str = m.post;
+          continue;
         }
       }
-    }
-    let N;
-    if (isSequence && n[0] !== void 0 && n[1] !== void 0) {
-      const x = numeric(n[0]);
-      const y = numeric(n[1]);
-      const width = Math.max(n[0].length, n[1].length);
-      let incr = n.length === 3 && n[2] !== void 0 ? Math.max(Math.abs(numeric(n[2])), 1) : 1;
-      let test = lte;
-      const reverse = y < x;
-      if (reverse) {
-        incr *= -1;
-        test = gte;
+      let dropsEmpties = dropEmpties && !m.post.length && !pre;
+      for (let d = 0; dropsEmpties && d < acc.length; d++) {
+        if (acc[d]) {
+          dropsEmpties = false;
+        }
       }
-      const pad = n.some(isPadded);
-      N = [];
-      for (let i = x; test(i, y); i += incr) {
-        let c;
-        if (isAlphaSequence) {
-          c = String.fromCharCode(i);
-          if (c === "\\") {
-            c = "";
+      values = [];
+      let valuesLength = 0;
+      outer: for (let j = 0; j < n.length; j++) {
+        const expanded = expand_(n[j], max, maxLength, maxDepth, depth + 1, maxRewrites, false);
+        for (let k = 0; k < expanded.length; k++) {
+          const v = expanded[k];
+          if (dropsEmpties && !v)
+            continue;
+          if (values.length >= max || valuesLength + v.length > maxLength) {
+            break outer;
           }
-        } else {
-          c = String(i);
-          if (pad) {
-            const need = width - c.length;
-            if (need > 0) {
-              const z = new Array(need + 1).join("0");
-              if (i < 0) {
-                c = "-" + z + c.slice(1);
-              } else {
-                c = z + c;
-              }
-            }
-          }
-        }
-        N.push(c);
-      }
-    } else {
-      N = [];
-      for (let j = 0; j < n.length; j++) {
-        N.push.apply(N, expand_(n[j], max, false));
-      }
-    }
-    for (let j = 0; j < N.length; j++) {
-      for (let k = 0; k < post.length && expansions.length < max; k++) {
-        const expansion = pre + N[j] + post[k];
-        if (!isTop || isSequence || expansion) {
-          expansions.push(expansion);
+          values.push(v);
+          valuesLength += v.length;
         }
       }
     }
+    acc = combine(acc, pre, values, max, maxLength, dropEmpties && !m.post.length);
+    if (!m.post.length)
+      break;
+    str = m.post;
   }
-  return expansions;
+  return acc;
 }
 __name(expand_, "expand_");
 
@@ -65854,8 +68632,8 @@ var path13 = {
   win32: { sep: "\\" },
   posix: { sep: "/" }
 };
-var sep8 = defaultPlatform === "win32" ? path13.win32.sep : path13.posix.sep;
-minimatch2.sep = sep8;
+var sep9 = defaultPlatform === "win32" ? path13.win32.sep : path13.posix.sep;
+minimatch2.sep = sep9;
 var GLOBSTAR = /* @__PURE__ */ Symbol("globstar **");
 minimatch2.GLOBSTAR = GLOBSTAR;
 var qmark2 = "[^/]";

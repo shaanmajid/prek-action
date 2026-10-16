@@ -9,6 +9,10 @@
 npm ci
 ```
 
+The repository's `.npmrc` disables dependency lifecycle scripts for installs.
+Explicit commands such as `npm test` and `npm run bundle` still run normally.
+Verify registry signatures and available provenance attestations with `npm audit signatures`.
+
 If you are bootstrapping from scratch and no lockfile exists yet, run `npm install` once, then commit the generated `package-lock.json`.
 
 ## Build
@@ -55,7 +59,7 @@ git diff --stat
 ## Release
 
 1. Make the source changes.
-2. Run `npm ci`.
+2. Run `npm ci` and `npm audit signatures`.
 3. Run `npm test`.
 4. Run `npm run bundle`.
 5. Commit both source files and the generated `dist/` output.
