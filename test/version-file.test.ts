@@ -77,13 +77,13 @@ describe('version-file', () => {
       'Ambiguous prek versions',
     )
     await expect(
-      resolve(filename, header + `[[${section}]]\nname = "prek"\n${source}`),
+      resolve(filename, `${header}[[${section}]]\nname = "prek"\n${source}`),
     ).rejects.toThrow('Missing locked prek version')
     await expect(resolve(filename, header + entry('invalid'))).rejects.toThrow(
       'Invalid locked prek version',
     )
     await expect(
-      resolve(filename, header + `[[${section}]]\nname = "other"\nversion = "0.3.5"`),
+      resolve(filename, `${header}[[${section}]]\nname = "other"\nversion = "0.3.5"`),
     ).rejects.toThrow('No prek version')
   })
 
