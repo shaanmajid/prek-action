@@ -20,7 +20,9 @@ inputs:
   prek-version:
     description: Version or semver range of prek to install (for example `0.2.1`, `0.3.x`, `<=1.0.0`, or `latest`)
     required: false
-    default: "latest"
+  version-file:
+    description: Path to uv.lock, pyproject.toml, Cargo.lock, or Cargo.toml containing a prek version. Relative to working-directory; prek-version takes precedence.
+    required: false
   show-verbose-logs:
     description: Whether to print the prek verbose log after `prek run`
     required: false

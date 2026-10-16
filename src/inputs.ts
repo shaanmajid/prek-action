@@ -9,7 +9,8 @@ export function getInputs(): Inputs {
     cache: core.getBooleanInput('cache'),
     extraArgs: legacyExtraArgs || modernExtraArgs,
     installOnly: core.getBooleanInput('install-only'),
-    prekVersion: core.getInput('prek-version') || 'latest',
+    prekVersion: core.getInput('prek-version'),
+    versionFile: core.getInput('version-file'),
     showVerboseLogs: core.getBooleanInput('show-verbose-logs'),
     workingDirectory: core.getInput('working-directory') || '.',
   }

@@ -2,7 +2,7 @@
 
 ## Setup
 
-1. Install Node.js 24 or newer.
+1. Install Node.js 24.10 or newer.
 2. Install dependencies:
 
 ```bash
