@@ -3,6 +3,11 @@ import type { Version, VersionManifest } from '../src/types'
 
 const mockContext = vi.hoisted(() => ({
   inputs: {} as Record<string, string>,
+  checksums: new Map<string, string>(),
+}))
+
+vi.mock('../src/known-checksums', () => ({
+  knownChecksumsByAsset: mockContext.checksums,
 }))
 
 const toolkitMocks = vi.hoisted(() => ({
@@ -55,6 +60,40 @@ describe('manifest helpers', () => {
     vi.resetModules()
     vi.clearAllMocks()
     mockContext.inputs = {}
+    mockContext.checksums.clear()
+    mockContext.checksums.set('0.3.4:prek-x86_64-unknown-linux-gnu.tar.gz', 'older-digest')
+    mockContext.checksums.set('0.3.5:prek-x86_64-unknown-linux-gnu.tar.gz', 'digest')
+    mockContext.checksums.set('0.4.0-beta.1:prek-x86_64-unknown-linux-gnu.tar.gz', 'prerelease-digest')
+  })
+
+  it('latest-known selects the highest stable bundled version without a manifest download', async () => {
+    const { resolveVersion } = await importManifestModule()
+
+    await expect(resolveVersion(' latest-known ')).resolves.toBe('0.3.5')
+    expect(toolkitMocks.downloadTool).not.toHaveBeenCalled()
+  })
+
+  it('latest-known fails when no stable version has bundled checksums', async () => {
+    mockContext.checksums.clear()
+    mockContext.checksums.set('0.4.0-beta.1:prek.tar.gz', 'digest')
+    const { resolveVersion } = await importManifestModule()
+
+    await expect(resolveVersion('latest-known')).rejects.toThrow(/No stable prek version/)
+    expect(toolkitMocks.downloadTool).not.toHaveBeenCalled()
+  })
+
+  it('known assets download from the official release URL without a manifest request', async () => {
+    const { getAssetForVersion, resolveVersion } = await importManifestModule()
+    const version = await resolveVersion('latest-known')
+
+    await expect(
+      getAssetForVersion(version, 'prek-x86_64-unknown-linux-gnu.tar.gz'),
+    ).resolves.toEqual({
+      downloadUrl:
+        'https://github.com/j178/prek/releases/download/v0.3.5/prek-x86_64-unknown-linux-gnu.tar.gz',
+      name: 'prek-x86_64-unknown-linux-gnu.tar.gz',
+    })
+    expect(toolkitMocks.downloadTool).not.toHaveBeenCalled()
   })
 
   it('resolveVersion accepts an exact version with a leading v', async () => {

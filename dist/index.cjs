@@ -21606,7 +21606,7 @@ var require_max_satisfying = __commonJS({
     "use strict";
     var SemVer = require_semver();
     var Range = require_range();
-    var maxSatisfying = /* @__PURE__ */ __name((versions, range3, options) => {
+    var maxSatisfying2 = /* @__PURE__ */ __name((versions, range3, options) => {
       let max = null;
       let maxSV = null;
       let rangeObj = null;
@@ -21625,7 +21625,7 @@ var require_max_satisfying = __commonJS({
       });
       return max;
     }, "maxSatisfying");
-    module2.exports = maxSatisfying;
+    module2.exports = maxSatisfying2;
   }
 });
 
@@ -22084,7 +22084,7 @@ var require_semver2 = __commonJS({
     var Range = require_range();
     var satisfies4 = require_satisfies();
     var toComparators = require_to_comparators();
-    var maxSatisfying = require_max_satisfying();
+    var maxSatisfying2 = require_max_satisfying();
     var minSatisfying = require_min_satisfying();
     var minVersion = require_min_version();
     var validRange2 = require_valid2();
@@ -22123,7 +22123,7 @@ var require_semver2 = __commonJS({
       Range,
       satisfies: satisfies4,
       toComparators,
-      maxSatisfying,
+      maxSatisfying: maxSatisfying2,
       minSatisfying,
       minVersion,
       validRange: validRange2,
@@ -69109,6 +69109,15 @@ var prekVersionManifestUrl = "https://raw.githubusercontent.com/j178/prek-action
 var versionManifestPromise;
 async function resolveVersion(versionInput) {
   const normalizedInput = versionInput.trim() || "latest";
+  if (normalizedInput === "latest-known") {
+    const versions = [...knownChecksumsByAsset.keys()].map((key) => key.split(":")[0]);
+    const version3 = semver4.maxSatisfying(versions, "*");
+    if (!version3) {
+      throw new Error("No stable prek version has bundled checksums");
+    }
+    info(`Resolved "latest-known" to ${version3} from bundled checksums`);
+    return version3;
+  }
   const exactVersion = semver4.valid(toVersion(normalizedInput));
   if (exactVersion) {
     const version3 = exactVersion;
@@ -69142,6 +69151,9 @@ function getManifestAssetForVersion(version3, archiveName, manifest) {
 }
 __name(getManifestAssetForVersion, "getManifestAssetForVersion");
 async function getAssetForVersion(version3, archiveName) {
+  if (knownChecksumsByAsset.has(`${version3}:${archiveName}`)) {
+    return buildReleaseAssetUrl(version3, archiveName);
+  }
   let manifest;
   try {
     manifest = await getVersionManifest();
@@ -69369,9 +69381,6 @@ __name(getBinaryPath, "getBinaryPath");
 async function verifyDownloadChecksum(archivePath, asset, version3) {
   const result = await validateDownloadedChecksum(archivePath, asset, version3);
   if (result === "missing") {
-    debug(
-      `Checksum is not known for ${buildChecksumKey(version3, asset.name)}; skipping verification for prek ${version3}`
-    );
     return;
   }
   info(`Verified SHA-256 checksum for ${asset.name} from prek ${version3}`);
@@ -69380,6 +69389,9 @@ __name(verifyDownloadChecksum, "verifyDownloadChecksum");
 async function validateDownloadedChecksum(archivePath, asset, version3, checksumMap = knownChecksumsByAsset) {
   const expectedDigest = checksumMap.get(buildChecksumKey(version3, asset.name));
   if (!expectedDigest) {
+    warning(
+      `Checksum is not known for ${buildChecksumKey(version3, asset.name)}; skipping verification for prek ${version3}`
+    );
     return "missing";
   }
   const digest = await hashFile(archivePath);

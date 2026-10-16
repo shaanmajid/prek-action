@@ -32,7 +32,7 @@ For v2 and earlier releases, major and minor tags such as `v2` and `v2.0` are mo
 | --- | --- | --- | --- |
 | `extra-args` | Additional arguments appended to `prek run --show-diff-on-failure --color=always` | No | `--all-files` |
 | `extra_args` | Deprecated alias for `extra-args` | No | |
-| `prek-version` | Version or semver range to install, for example `0.2.30`, `0.3.x`, `<=1.0.0`, or `latest` | No | `latest` |
+| `prek-version` | Version or semver range to install, for example `0.2.30`, `0.3.x`, `<=1.0.0`, `latest`, or `latest-known` | No | `latest` |
 | `install-only` | Install `prek` but skip `prek run` | No | `false` |
 | `working-directory` | Directory where `prek run` is executed | No | `.` |
 | `show-verbose-logs` | Print the `prek` verbose log after `prek run` completes | No | `true` |
@@ -85,6 +85,20 @@ steps:
     with:
       prek-version: '0.3.x'
 ```
+
+In a release containing this feature, set the following input to install the newest
+stable `prek` version covered by this action's bundled checksums:
+
+```yaml
+with:
+  prek-version: 'latest-known'
+```
+
+With `latest-known`, updating the action pin updates the selected `prek` version.
+Version selection and the official release URL come from the pinned action, without
+downloading the mutable version manifest. Downloads are verified against bundled
+SHA-256 checksums. The default remains `latest`, which follows new stable releases
+and warns when a download has no bundled checksum.
 
 Install only:
 

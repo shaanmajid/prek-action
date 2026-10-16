@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises'
 import * as core from '@actions/core'
 import * as tc from '@actions/tool-cache'
 import * as semver from 'semver'
+import { knownChecksumsByAsset } from './known-checksums'
 import type { ManifestAsset, NormalizedVersion, Version, VersionManifest } from './types'
 
 const prekReleasesBaseUrl = 'https://github.com/j178/prek/releases/download'
@@ -10,10 +11,19 @@ const prekVersionManifestUrl =
 // Cache the in-flight manifest download so version resolution and asset lookup share one request per process.
 let versionManifestPromise: Promise<VersionManifest> | undefined
 
-// Resolve user input to a bare version. Exact versions pass through directly; ranges and `latest`
-// are resolved from the downloaded version manifest.
+// Exact versions and `latest-known` resolve locally; ranges and `latest` use the remote manifest.
 export async function resolveVersion(versionInput: string): Promise<Version> {
   const normalizedInput = versionInput.trim() || 'latest'
+  if (normalizedInput === 'latest-known') {
+    const versions = [...knownChecksumsByAsset.keys()].map(key => key.split(':')[0])
+    const version = semver.maxSatisfying(versions, '*')
+    if (!version) {
+      throw new Error('No stable prek version has bundled checksums')
+    }
+    core.info(`Resolved "latest-known" to ${version} from bundled checksums`)
+    return version as Version
+  }
+
   const exactVersion = semver.valid(toVersion(normalizedInput))
   if (exactVersion) {
     const version = exactVersion as Version
@@ -55,12 +65,16 @@ export function getManifestAssetForVersion(
   return asset
 }
 
-// Return the asset to download for a version. Prefer manifest metadata when available;
-// if an exact version is newer than the manifest, fall back to the release URL pattern.
+// Known assets use the official release URL without consulting mutable remote metadata.
+// Other assets prefer the manifest, falling back to the release URL pattern.
 export async function getAssetForVersion(
   version: Version,
   archiveName: string,
 ): Promise<ManifestAsset> {
+  if (knownChecksumsByAsset.has(`${version}:${archiveName}`)) {
+    return buildReleaseAssetUrl(version, archiveName)
+  }
+
   let manifest: VersionManifest | undefined
   try {
     manifest = await getVersionManifest()
